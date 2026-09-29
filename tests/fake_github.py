@@ -225,7 +225,8 @@ class FakeGitHub:
         if operators > 5:
             return httpx.Response(422, json={
                 "message": "Validation Failed",
-                "errors": [{"message": "The search contains more than five AND / OR / NOT operators.",
+                # Wording as returned by the real search API (observed in a recording).
+                "errors": [{"message": "More than five AND / OR / NOT operators were used.",
                             "code": "invalid"}],
             })
         source = self.issues

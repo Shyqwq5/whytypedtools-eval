@@ -256,7 +256,7 @@ def fixture_path(tool: str, name: str) -> Path:
 def write_fixture(fixture: dict[str, Any]) -> Path:
     path = fixture_path(fixture["tool"], fixture["scenario"])
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(fixture, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(fixture, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     return path
 
 

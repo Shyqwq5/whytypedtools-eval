@@ -28,7 +28,7 @@
           "message": "Validation Failed",
           "errors": [
             {
-              "message": "The search contains more than five AND / OR / NOT operators.",
+              "message": "More than five AND / OR / NOT operators were used.",
               "code": "invalid"
             }
           ]
@@ -40,7 +40,7 @@
     "ok": false,
     "error": {
       "type": "validation_failed",
-      "message": "GitHub rejected the request as invalid: Validation Failed (The search contains more than five AND / OR / NOT operators.). Adjust the arguments and try again.",
+      "message": "GitHub rejected the request as invalid: Validation Failed (More than five AND / OR / NOT operators were used.). Adjust the arguments and try again.",
       "retryable": false,
       "retry_after_seconds": null
     }
