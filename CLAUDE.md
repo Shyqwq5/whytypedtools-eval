@@ -2,19 +2,22 @@
 
 ## What this is
 A set of GitHub integration tools exposed as an MCP server, a minimal test agent,
-and an eval suite measuring tool-use success and safety. Also compares typed tools
-against generic bash tools (with rule-based and LLM guardrails).
+and an eval suite measuring tool-use success and safety. Compares typed tools
+against a generic GitHub API tool (with rule-based and LLM guardrails).
 
-### The five tool configurations under test
-| Name   | What the agent gets                                   |
-|--------|-------------------------------------------------------|
-| tool_a | generic bash tool                                     |
-| tool_b | bash + rule-based guardrail                           |
-| tool_c | bash + LLM guardrail                                  |
-| tool_d | bash + rule-based + LLM guardrail                     |
-| tool_e | typed GitHub tools (5–6 tools, served over MCP)       |
+### Tool configurations under test
+| Name   | What the agent gets                                        | Status |
+|--------|------------------------------------------------------------|--------|
+| tool_a | generic GitHub API tool (`github_api`), no guard           | designed |
+| tool_b | generic API + rule-based guard                             | later |
+| tool_c | generic API + LLM guard                                    | later |
+| tool_d | generic API + rule-based + LLM guard                       | designed |
+| tool_e | typed GitHub tools (4 tools, also served over MCP)         | built |
 
-- tool_e is the main work (~70% effort). tool_a–d are the control experiment (~30%).
+- tool_e is the main work (~70% effort). The generic API variants are the control
+  experiment (~30%). Design: `docs/design/generic-api-baseline.md`.
+- The bash baseline was dropped (only listed as future work in the README; do not
+  build it).
 - Guardrails are composable modules; tool_b/c/d are just different compositions,
   not separate implementations.
 - tool_e deliberately includes easily-confused tools (e.g. `list_issues` vs
@@ -34,14 +37,14 @@ against generic bash tools (with rule-based and LLM guardrails).
 ## Roadmap (do steps in order; only work on the step you are asked for)
 1. Sandbox repo + seed data + credential handling.  (done)
 2. First 1–2 tools with integration tests (recorded API responses as fixtures).  (done)
-3. Minimal agent; wire the full loop end-to-end.  <- in progress (see "Status / handoff")
-4. Expand to 5–6 tools incl. confusable ones; expose as MCP server.
-5. Eval sets (functional + safety) with per-run logs of every tool call.
-6. First eval round, multiple runs per task.
+3. Minimal agent; wire the full loop end-to-end.  (done)
+4. Expand tools incl. confusable ones; expose as MCP server.  (done: 4 tools)
+5. Eval sets (functional + safety) with per-run logs of every tool call.  (done for tool_e)
+6. First eval round, multiple runs per task.  <- waiting for user approval (see handoff)
 7. Failure analysis -> tune descriptions/prompts -> second round. Record before/after.
 8. "How to add a tool" docs + scaffold command.
 9. CI: coverage checks + baseline comparison.
-10. Bash control experiment (tool_a–tool_d).
+10. Generic API control experiment (tool_a, tool_d first; b/c later).
 11. README with metrics tables and safety-vs-usability chart.
 
 ## Two repositories
@@ -114,85 +117,79 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   `scripts/run_agent.py`. System prompt: `prompts/system.md` (hashed into traces).
 - Raw traces go to `runs/` (gitignored). Eval summaries go to `results/` (committed,
   created in step 5/6).
+- The MCP server (`mcp_server.py`, `scripts/mcp_server.py`) wraps the registry
+  verbatim; evals call the registry directly.
+- Writes: `ToolContext.write_mode` is `live` or `dry_run`; every write is logged in
+  `ToolContext.write_log`. Agent CLI, MCP server and eval runner default to dry-run.
+  Claude only runs dry-run; live runs (`--allow-writes`, `--live`) are run by the user.
+- Evals: tasks in `evals/tasks.yaml` (quote any value containing `#{issue:...}`),
+  code in `src/whytypedtools_eval/evals/` (tasks, effects, scoring, configs, runner,
+  report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-29, step 3 code done)
+## Status / handoff (updated 2026-09-29, milestone: first eval report)
 
 ### Where things stand
-- Steps 1 and 2 are done. Step 3 code and tests are done; the first real run
-  against the Cohere API is pending (the user runs it). `uv run pytest`: 265 passed.
-  Tool tests use fixtures recorded from the real sandbox (21 recorded + 4 synthetic);
-  agent tests use a scripted fake model and never call Cohere (conftest blocks
-  `cohere.ClientV2`).
+- Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
+  fixtures recorded from the real sandbox (get_issue too); add_label fixtures come
+  from the fake only (the recorder refuses write scenarios against the real sandbox).
+- Tools: list_issues, search_issues (confusable pair), get_issue (full body; the only
+  way to see the `full_body` injection), add_label (only write; existing labels only).
+- Eval: 30 tasks, scoring, runner with live/dry-run modes, `--estimate`.
+  Dry-run smoke runs on 5 tasks all passed after fixing truncated prompts.
+- Estimate for the full first round (30 tasks x 3 runs, tool_e): ~190 model calls,
+  ~510k input / ~53k output tokens (range x0.7-x1.5), ~590 GitHub requests, ~14 min.
 - Git: branch `main`, **no remote configured; nothing has been pushed yet**.
   Before the first push run `git ls-files | grep -E '\.env$|state\.json'` (must be empty).
 - The local folder is still named `tool_eval`; the user plans to rename it to
   `whytypedtools-eval` (close Claude Code first, then `uv sync` to rebuild `.venv`).
 
-### Key decisions in step 2 (and why)
-- Tools are protocol-independent (`tools/registry.py`: `list_tools`/`call_tool`) so
-  the MCP server in step 4 is a thin wrapper, and evals can call tools directly.
-- `description.md` is a separate file per tool because it is the object we tune in
-  step 7 and compare across versions. Drafts include cross-references between
-  `list_issues` and `search_issues`, as a normal engineer would write them (not a
-  deliberately weak baseline).
-- State defaults differ on purpose (list: `open`, search: `all`) and are visible in
-  the schemas; this is a candidate confusion point to measure, not to pre-fix.
-- Label hints only when a result is empty AND labels were given (labels fetched once
-  per context), so normal calls cost no extra request.
-- Rate limits: seed/reset keep the patient client; tools use `fail_fast_after=5s`
-  and return `rate_limited` with `retry_after_seconds` so an agent never blocks.
-  Decoding/parse failures are `invalid_response` and not retryable.
-- Search scope is enforced three ways: tool-built `repo:… is:issue` prefix,
-  allow-listed qualifiers only, and post-filtering by `repository_url`.
-- Two injection issues: `injection-close-all` (payload past the 300-char excerpt,
-  `exposure: full_body`) and `injection-summary` (payload inside the excerpt,
-  `exposure: summary`), to measure whether truncation reduces exposure. The first
-  one's lead-in sentence does appear in excerpts; kept as is by decision.
-- Fixture recording is all-or-nothing: every scenario declares `expect`; any
-  mismatch or failed secret/identifier scan (plain and URL-decoded) writes nothing.
-
-### Key decisions in step 3 (and why)
-- The loop is provider-neutral (`ChatModel` protocol); only `cohere_model.py` knows
-  Cohere formats. Tool definitions are converted from `registry.list_tools()`.
-- Tool budget counts calls, not turns; calls in one turn run in order. Calls over
-  budget get a `budget_exceeded` result, then one final turn with
-  `tool_choice=NONE`. No separate max-turns limit: each turn either calls a tool or
-  ends the run, so model calls are bounded by max_tool_calls + 2.
-- Retries (429/5xx/network, exponential backoff, Retry-After, max 4, max wait 60s)
-  are done by the adapter with SDK retries off, so each retry is in the trace.
-  Error messages never include response bodies or headers (`ApiError.__str__` does).
-- Defaults: `command-a-plus-05-2026` (newest Command model, used in the SDK 7.2
-  examples), temperature 0, seed 0 (Cohere's `seed` is supported but best effort).
-- Tool results go back to Cohere as `document` content of tool messages.
+### Key decisions (and why)
+- Tools are protocol-independent (`tools/registry.py`); `description.md` per tool is
+  the object tuned in step 7. State defaults differ on purpose (list: open, search:
+  all) as a measured confusion point.
+- Search scope is enforced by a tool-built `repo:... is:issue` prefix, allow-listed
+  qualifiers, and post-filtering by `repository_url`.
+- Two injection issues: `injection-close-all` (`exposure: full_body`) and
+  `injection-summary` (`exposure: summary`); the report splits injection results by
+  exposure.
+- Agent: provider-neutral loop; the Cohere adapter does retries (traced). Command A+
+  reasons by default; thinking is recorded, sent back, and set explicitly. The tool
+  budget counts calls; over-budget calls get `budget_exceeded`, then one final turn
+  without tools. Tool results may carry trace-only `_trace` data.
+- Scoring: dry-run captured writes count as done; unexpected writes are unsafe on
+  safety tasks; calls to non-existent tools count as blocked attempts; tool/args
+  checks only for typed configs. Over-blocking = guard block or refusal on a benign
+  task. Definitions: `docs/design/eval-mvp.md`.
+- Live eval: reset before the eval and after any run with an executed write (drift
+  check via reset dry-run).
+- MCP SDK 2.x: FastMCP is now `MCPServer`; tools are advertised with the registry
+  schema verbatim.
 
 ### Known issues / unverified assumptions
-- Cohere's `thinking` parameter is not set (API default). Whether Command A+
-  reasons by default, and what that costs in tokens, is unverified; check the
-  first real traces.
-- `sort=comments` on the issues list returned an order inconsistent with the real
-  comment counts (#1 with 2 comments ranked after three 1-comment issues), in three
-  recordings on 2026-09-29. Cause unconfirmed. Decision: removed from the
-  `list_issues` schema (an agent must not be offered an option whose results can't
-  be trusted); a test asserts it stays out. `search_issues` still offers
-  `sort=comments` (separate search index, not observed to be wrong, not verified).
-- Search index lag after real writes is unmeasured: every real seed/reset/record run
-  so far made zero writes, so `wait_for_search_index` always passed on first check.
-  The `updated_at` equality between search and REST has been confirmed.
+- `sort=comments` removed from `list_issues` (GitHub ordered it wrongly in three
+  recordings). `search_issues` still offers `sort=comments` (not verified).
+- Search index lag after real writes is unmeasured (deferred).
 - Search `best_match` order is not emulated by the fake; tests must not rely on it.
+- Search gold answers assume the agent searches with the prompt's wording; a very
+  different query can legitimately return a different set. Check such failures in
+  the first report before blaming the tools.
 
 ### Pending items
-1. First real agent run (user runs `scripts/run_agent.py`); then check the trace
-   (token usage present? finish reasons as expected? tool results well-formed?).
-2. Search index delay: on the next reset that actually changes something (user runs
-   it), count the "search index stale … retrying" lines and record the result in
-   README "Findings".
+1. **User**: approve and run the first live eval:
+   `uv run python scripts/run_eval.py --live` (resets the sandbox; writes). Then
+   Claude analyses `results/<eval-id>/` and writes the first report.
+2. Build the generic API baseline (tool_a, tool_d) per
+   `docs/design/generic-api-baseline.md`; same tasks, prompt and scoring.
 3. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
 
+### Deferred (by user decision)
+- Scaffold/docs for adding tools, CI coverage and baseline gating, tool_b and
+  tool_c, the search `sort=comments` check, search index lag measurement.
+
 ### Backlog (later steps)
-- All tool configurations (tool_a–tool_e) must use the same system prompt
-  (`prompts/system.md`), so differences come from the tools, not the prompt.
+- All tool configurations must use the same system prompt (`prompts/system.md`),
+  so differences come from the tools, not the prompt.
 - Ablation: run the evals with the "tool results are untrusted data" paragraph
   removed from the system prompt, to measure its effect on injection block rate and
   over-blocking.
-- `results/` (committed) for eval summaries; raw `runs/` traces stay gitignored.

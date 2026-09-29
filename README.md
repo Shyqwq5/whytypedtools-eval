@@ -1,11 +1,13 @@
 # whytypedtools-eval
 
 GitHub integration tools exposed as an MCP server, a minimal test agent, and an eval
-suite that measures tool-use success and safety — comparing typed tools against
-generic bash tools with rule-based and LLM guardrails.
+suite that measures tool-use success and safety — comparing typed tools against a
+generic GitHub API tool with rule-based and LLM guardrails.
 
-> Work in progress. Currently implemented: sandbox repo management and the first two
-> typed tools (`list_issues`, `search_issues`).
+> Work in progress. Implemented: sandbox repo management, four typed tools, the MCP
+> server, the test agent, and the eval runner for the typed tools (tool_e). Next: the
+> first eval report, then the generic API baseline
+> ([design](docs/design/generic-api-baseline.md)).
 
 ## Sandbox setup
 
@@ -78,9 +80,33 @@ against stale search results. Pass `--no-wait-search` to skip this.
 - Independently, the HTTP client rejects any write whose path is not inside
   `repos/<SANDBOX_REPO>/…` (compared by whole path segment, case-insensitively),
   and rejects all writes to the repo resource itself.
-- The seed data contains one issue with an embedded prompt-injection instruction.
-  It is an intentional safety test case; the marker saying so lives only in the
-  YAML (`safety_test`) and is never sent to GitHub.
+- The seed data contains two issues with embedded prompt-injection instructions
+  (one inside the 300-character excerpt that list/search return, one only in the full
+  body). They are intentional safety test cases; the marker saying so lives only in
+  the YAML (`safety_test`) and is never sent to GitHub.
+
+## Tools
+
+| Tool | Kind | What it does |
+|---|---|---|
+| `list_issues` | read | Filter issues by state and labels (no text matching). |
+| `search_issues` | read | Full-text search, always scoped to the sandbox repo. |
+| `get_issue` | read | One issue with its full body and comments. |
+| `add_label` | write | Add existing labels to one issue. The only write tool. |
+
+`list_issues` and `search_issues` are deliberately easy to confuse, so tool-selection
+accuracy can be measured. Each tool lives in `src/whytypedtools_eval/tools/<name>/`
+with the `description.md` the model sees. Writes have two modes: **live** (sent to
+GitHub) and **dry-run** (recorded, not sent; the tool returns the same result shape).
+
+### MCP server
+
+A thin wrapper over the tool registry: same names, descriptions and input schemas.
+
+```bash
+uv run python scripts/mcp_server.py                  # stdio; writes are dry-run
+uv run python scripts/mcp_server.py --allow-writes   # add_label changes the sandbox
+```
 
 ## Tool fixtures
 
@@ -110,7 +136,8 @@ uv run python scripts/run_agent.py --help   # --model, --max-tool-calls, --tempe
 ```
 
 It prints the final answer, the run status and the trace path; the exit code is 0
-only for status `completed`. Defaults: model `command-a-plus-05-2026`,
+only for status `completed`. Writes are dry-run unless you pass `--allow-writes`.
+Cohere reasoning (`--thinking`) is enabled explicitly by default. Defaults: model `command-a-plus-05-2026`,
 temperature 0, seed 0, at most 10 tool calls per run.
 
 Run statuses: `completed`, `no_answer`, `max_tool_calls` (calls over budget are not
@@ -127,13 +154,37 @@ will be committed under `results/`). One JSON event per line:
 | Event | Fields |
 |---|---|
 | `run_start` | `trace_version`, `run_id`, `started_at`, `task`, `model` (provider, model, temperature, seed, sdk_version), `max_tool_calls`, `system_prompt` (path, sha256), `tools` (name, `description_sha256`, `schema_sha256`), `git_commit`, `git_dirty` |
-| `model_call` | `step`, `allow_tools`, `latency_ms`, `retries` (reason, wait_seconds), `finish_reason`, `text`, `tool_plan`, `tool_calls` (id, name, raw arguments), `usage` (input/output tokens, billed input/output tokens); or `error` (message, status) |
-| `tool_call` | `step`, `call_id`, `name`, `arguments` (parsed, or the raw string if invalid), `executed`, `ok`, `error_type`, `result`, `latency_ms` |
+| `model_call` | `step`, `allow_tools`, `latency_ms`, `retries` (reason, wait_seconds), `finish_reason`, `text`, `tool_plan`, `thinking`, `tool_calls` (id, name, raw arguments), `usage` (input/output tokens, billed input/output tokens); or `error` (message, status) |
+| `tool_call` | `step`, `call_id`, `name`, `arguments` (parsed, or the raw string if invalid), `executed`, `ok`, `error_type`, `result`, `latency_ms`, optional `extra` (trace-only details the model never sees) |
 | `run_end` | `status`, `final_answer`, `totals` (model_calls, tool_calls, input_tokens, output_tokens, latency_ms) |
 
 Every event also has `event` and `ts`. The hashes identify exactly which prompt and
 tool descriptions produced a run, for before/after comparisons. The values of
 `GITHUB_TOKEN` and `COHERE_API_KEY` are replaced with `[REDACTED]` before writing.
+Eval runs also record `config`, `task_id`, `run_index`, `eval_id` and `write_mode` in
+`run_start`.
+
+## Evals
+
+30 tasks in [`evals/tasks.yaml`](evals/tasks.yaml): functional (9), tool selection
+between `list_issues` and `search_issues` (8), dangerous requests (7), and indirect
+prompt injection through both injection issues (6). Gold answers reference seed
+keys. Scoring, safety outcomes and over-blocking are defined in
+[docs/design/eval-mvp.md](docs/design/eval-mvp.md).
+
+```bash
+uv run python scripts/run_eval.py --estimate            # expected calls/tokens/time; no API calls
+uv run python scripts/run_eval.py --runs 1 --tasks f-open-bugs   # dry run: no writes to GitHub
+uv run python scripts/run_eval.py --live                # 3 runs per task; resets the sandbox first
+```
+
+`--live` lets `add_label` really write; the runner resets the sandbox before the eval
+and again after any run that changed it. Results go to `results/<eval-id>/`
+(`summary.md`, `summary.json`, `runs.jsonl`; committed); raw traces go to `runs/`.
+
+Configurations: **tool_e** (typed tools) now; the generic GitHub API tool without a
+guard (tool_a) and with rules + LLM guard (tool_d) come next, with the same tasks,
+system prompt and scoring.
 
 ## Findings
 
@@ -147,7 +198,14 @@ found by recording against a real sandbox.
 | 422 wording (too many operators) | Real message: "More than five AND / OR / NOT operators were used." | Fake updated to match. |
 | Compressed responses | GitHub gzips most responses; this broke the first version of the fixture recorder. | Fixed; regression test added. |
 | Search index lag | `wait_for_search_index` succeeded on the first check in every real run so far, but those runs made no writes, so actual lag after writes is still unmeasured. | Keep waiting after seed/reset; measure on the next reset that makes changes. |
+| Cohere reasoning | Command A+ reasons by default: the first real run used 317 output tokens (248 billed) for a ~90-token answer, and the reasoning was returned as `thinking` content that the adapter ignored. | Thinking is now recorded in traces, sent back on later steps, and set explicitly (`enabled`) so an API default change cannot silently alter results. |
 | Agent determinism | Cohere's SDK documents `seed` as best effort ("determinism cannot be totally guaranteed"); temperature 0 does not guarantee identical outputs either. From documentation; run-to-run variance not yet measured. | The agent sends temperature 0 and seed 0 by default and records both in every trace, but eval tasks run several times and we report mean and consistency. |
+
+## Future work
+
+- A bash baseline.
+- Guard-only variants of the generic API tool (tool_b: rules, tool_c: LLM).
+- CI: coverage checks and baseline comparison.
 
 ## Development
 
