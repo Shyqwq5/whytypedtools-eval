@@ -111,11 +111,11 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   `evals/baseline.json` and fails on regressions > threshold.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-30, end of step 2)
+## Status / handoff (updated 2026-09-29, end of step 2)
 
 ### Where things stand
-- Steps 1 and 2 are done. `uv run pytest`: 204 passed, all on fixtures recorded
-  from the real sandbox (22 recorded + 4 synthetic error fixtures).
+- Steps 1 and 2 are done. `uv run pytest`: 203 passed, all on fixtures recorded
+  from the real sandbox (21 recorded + 4 synthetic error fixtures).
 - Git: branch `main`, **no remote configured; nothing has been pushed yet**.
   Before the first push run `git ls-files | grep -E '\.env$|state\.json'` (must be empty).
 - The local folder is still named `tool_eval`; the user plans to rename it to
@@ -146,27 +146,23 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 
 ### Known issues / unverified assumptions
 - `sort=comments` on the issues list returned an order inconsistent with the real
-  comment counts (#1 with 2 comments ranked after three 1-comment issues), twice on
-  the same day. Cause unconfirmed (suspected stale sort key after reset re-created
-  comments). `test_sort_by_comments` is marked KNOWN WEAK. See README "Findings".
+  comment counts (#1 with 2 comments ranked after three 1-comment issues), in three
+  recordings on 2026-09-29. Cause unconfirmed. Decision: removed from the
+  `list_issues` schema (an agent must not be offered an option whose results can't
+  be trusted); a test asserts it stays out. `search_issues` still offers
+  `sort=comments` (separate search index, not observed to be wrong, not verified).
 - Search index lag after real writes is unmeasured: every real seed/reset/record run
   so far made zero writes, so `wait_for_search_index` always passed on first check.
   The `updated_at` equality between search and REST has been confirmed.
 - Search `best_match` order is not emulated by the fake; tests must not rely on it.
 
 ### Pending items
-1. Experiment (b): after time has passed, re-record only `list_most_commented`
-   (`uv run python scripts/record_fixtures.py --only list_most_commented`, read-only,
-   Claude may run it). If the order now matches comment counts, make
-   `test_sort_by_comments` a strict top-N check. If it is still wrong, propose
-   removing `sort=comments` from the `list_issues` schema (ask before changing).
-   Either way, comment-count ordering stays out of eval gold answers.
-2. Search index delay: on the next reset that actually changes something (user runs
+1. Search index delay: on the next reset that actually changes something (user runs
    it), count the "search index stale … retrying" lines and record the result in
    README "Findings".
-3. Step 3 — thin test agent using Cohere Command with tool use, calling tools via
+2. Step 3 — thin test agent using Cohere Command with tool use, calling tools via
    `tools.registry` (no MCP yet). The user will put `COHERE_API_KEY` in `.env`;
    never read or print it. Add it to `.env.example` and `config.py` (as `SecretStr`)
    when starting. Per-run logs of every tool call (name, args, result) are needed
    later for failure analysis, so design the agent loop with that in mind.
-4. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
+3. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.

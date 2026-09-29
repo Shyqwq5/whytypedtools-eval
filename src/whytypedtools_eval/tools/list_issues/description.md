@@ -8,7 +8,7 @@ not look at issue text. To find issues that mention a word, phrase or topic
 Parameters:
 - state: "open" (default), "closed", or "all".
 - labels: label names; an issue must have ALL of them. Omit for no label filter.
-- sort: "created" (default), "updated", or "comments". direction: "desc" (default) or "asc".
+- sort: "created" (default) or "updated". direction: "desc" (default) or "asc".
 - max_results: 1–50, default 20.
 
 Returns each issue's number, title, state, labels, comment count, dates and the

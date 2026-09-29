@@ -24,7 +24,8 @@ class ListIssuesInput(ToolInput):
     labels: list[Label] = Field(
         default=[], max_length=10, description="Only issues that have ALL of these labels."
     )
-    sort: Literal["created", "updated", "comments"] = Field("created", description="Sort field.")
+    # "comments" is deliberately not offered: GitHub returned it out of order (README "Findings").
+    sort: Literal["created", "updated"] = Field("created", description="Sort field.")
     direction: Direction = Field("desc", description="Sort direction.")
     max_results: int = Field(20, ge=1, le=50, description="Maximum number of issues to return.")
 

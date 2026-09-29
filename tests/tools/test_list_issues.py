@@ -6,7 +6,7 @@ from tests.recording import FIXTURE_REPO, load_fixture, replay_call
 from whytypedtools_eval.github import GitHubClient
 from whytypedtools_eval.sandbox.models import load_seed
 from whytypedtools_eval.tools.base import EXCERPT_CHARS, ToolContext
-from whytypedtools_eval.tools.registry import call_tool
+from whytypedtools_eval.tools.registry import call_tool, list_tools
 
 SEED = load_seed(SEED_FILE)
 SUMMARY_KEYS = {
@@ -59,16 +59,15 @@ def test_multiple_labels_are_and(mock_api):
     assert len(expected) >= 2
 
 
-def test_sort_by_comments(mock_api):
-    # KNOWN WEAK: only checks that the returned page is non-increasing. In a real
-    # recording GitHub ranked three 1-comment issues above a 2-comment one, so the
-    # "top N by comments" is not trustworthy (README "Findings"). Strengthen to a
-    # true top-N check after the re-recording experiment; if the order is still
-    # wrong, sort=comments will be removed from the tool schema instead.
-    issues = run(mock_api, "list_most_commented")["result"]["issues"]
-    counts = [i["comments"] for i in issues]
-    assert counts == sorted(counts, reverse=True)
-    assert len(issues) == 3
+def test_sort_by_comments_is_not_offered():
+    # GitHub's comment ordering was wrong in repeated real recordings (README
+    # "Findings"), so the agent must not be offered it.
+    spec = next(t for t in list_tools() if t["name"] == "list_issues")
+    assert spec["input_schema"]["properties"]["sort"]["enum"] == ["created", "updated"]
+    assert '"comments"' not in spec["description"]
+    result = call_tool(None, "list_issues", {"sort": "comments"})  # type: ignore[arg-type]
+    assert result["ok"] is False
+    assert result["error"]["type"] == "invalid_input"
 
 
 def test_ascending_creation_order(mock_api):

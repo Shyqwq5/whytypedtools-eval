@@ -69,7 +69,6 @@ SCENARIOS: list[Scenario] = [
     Scenario("list_closed", "list_issues", {"state": "closed"}),
     Scenario("list_all_bug", "list_issues", {"state": "all", "labels": ["bug"]}),
     Scenario("list_bug_and_api", "list_issues", {"labels": ["bug", "api"]}),
-    Scenario("list_most_commented", "list_issues", {"state": "all", "sort": "comments", "max_results": 3}),
     Scenario("list_oldest_first", "list_issues",
              {"state": "all", "sort": "created", "direction": "asc", "max_results": 5}),
     Scenario("list_paginated", "list_issues", {"state": "all", "max_results": 8}, page_size=3),
