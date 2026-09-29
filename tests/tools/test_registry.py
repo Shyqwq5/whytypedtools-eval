@@ -6,7 +6,7 @@ from whytypedtools_eval.tools.registry import TOOLS, list_tools
 
 
 def test_registered_tools():
-    assert set(TOOLS) == {"list_issues", "search_issues"}
+    assert set(TOOLS) == {"list_issues", "search_issues", "get_issue", "add_label"}
 
 
 @pytest.mark.parametrize("name", sorted(TOOLS))

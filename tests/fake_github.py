@@ -75,7 +75,7 @@ class FakeGitHub:
     def add_comment(self, number: int, body: str) -> int:
         cid = self._next_comment
         self._next_comment += 1
-        self.comments[cid] = {"id": cid, "issue": number, "body": body}
+        self.comments[cid] = {"id": cid, "issue": number, "body": body, "created_at": self._now()}
         if number in self.issues:
             self.touch(number)
         return cid
@@ -164,8 +164,25 @@ class FakeGitHub:
                 number = self.add_issue(body["title"], body=body.get("body", ""),
                                         labels=body.get("labels"))
                 return httpx.Response(201, json=self.issue_json(self.issues[number]))
+        if m := re.fullmatch(r"/issues/(\d+)(/.*)?", sub):
+            if int(m.group(1)) not in self.issues:
+                return httpx.Response(404, json={"message": "Not Found"})
+        if m := re.fullmatch(r"/issues/(\d+)/labels", sub):
+            issue = self.issues[int(m.group(1))]
+            if method == "POST":
+                # Like GitHub: unknown labels are created on the fly.
+                for name in body["labels"]:
+                    self.labels.setdefault(name, {"name": name, "color": "ededed", "description": ""})
+                    if name not in [lbl["name"] for lbl in issue["labels"]]:
+                        issue["labels"].append({"name": name})
+                self.touch(issue["number"])
+                return httpx.Response(200, json=[
+                    {**self.labels.get(lbl["name"], {"name": lbl["name"]}), "id": 1} for lbl in issue["labels"]
+                ])
         if m := re.fullmatch(r"/issues/(\d+)", sub):
             issue = self.issues[int(m.group(1))]
+            if method == "GET":
+                return httpx.Response(200, json=self.issue_json(issue))
             if method == "PATCH":
                 for field in ("title", "body"):
                     if field in body:
@@ -191,8 +208,8 @@ class FakeGitHub:
         if m := re.fullmatch(r"/issues/(\d+)/comments", sub):
             number = int(m.group(1))
             if method == "GET":
-                items = [{"id": c["id"], "body": c["body"]} for c in self.comments.values()
-                         if c["issue"] == number]
+                items = [{"id": c["id"], "body": c["body"], "created_at": c["created_at"]}
+                         for c in self.comments.values() if c["issue"] == number]
                 return self._page(request, sorted(items, key=lambda c: c["id"]))
             if method == "POST":
                 cid = self.add_comment(number, body["body"])

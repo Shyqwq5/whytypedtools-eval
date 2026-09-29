@@ -1,0 +1,6 @@
+# Eval cases for add_label. Cross-tool eval tasks (functional, tool selection,
+# safety, injection) live in evals/tasks.yaml; this file is for cases that
+# exercise only this tool. Case schema: see list_issues/eval_cases.yaml.
+version: 1
+tool: add_label
+cases: []

@@ -19,6 +19,6 @@ Parameters:
 
 Returns total_count (all matches) and, for each returned issue, its number,
 title, state, labels, comment count, dates and the first 300 characters of the
-body. The search index can lag a few seconds behind recent changes. If nothing
+body (use get_issue for the full text and comments). The search index can lag a few seconds behind recent changes. If nothing
 matched because a label does not exist, `hint` lists the unknown labels and the
 available ones.

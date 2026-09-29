@@ -97,6 +97,12 @@ def record_real(scenarios: list[Scenario]) -> None:
         settings = load_settings(ROOT / ".env")
     except ConfigError as exc:
         sys.exit(f"error: {exc}")
+    writes = [s.name for s in scenarios if s.writes]
+    if writes:
+        print(f"skipping write scenarios (recorded from the fake only): {', '.join(writes)}")
+        scenarios = [s for s in scenarios if not s.writes]
+    if not scenarios:
+        return
     token = settings.github_token.get_secret_value()
     repo = settings.sandbox_repo
     try:

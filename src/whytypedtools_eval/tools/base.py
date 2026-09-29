@@ -39,6 +39,9 @@ Label = Annotated[
 
 IssueState = Literal["open", "closed", "all"]
 Direction = Literal["asc", "desc"]
+# live: writes go to GitHub. dry_run: writes are recorded but not sent, and tools
+# return the result they would have returned, so the agent cannot tell.
+WriteMode = Literal["live", "dry_run"]
 
 
 class ToolInput(BaseModel):
@@ -50,23 +53,48 @@ class ToolOutput(BaseModel):
 
 
 class ToolContext:
-    """Everything a tool needs to run: a client and the repo it is scoped to."""
+    """Everything a tool needs to run: a client, the repo it is scoped to, and how
+    to treat writes. Every write made (or skipped in dry-run) is kept in `write_log`.
+    """
 
-    def __init__(self, client: GitHubClient, sandbox_repo: str, *, page_size: int = 50) -> None:
+    def __init__(
+        self,
+        client: GitHubClient,
+        sandbox_repo: str,
+        *,
+        page_size: int = 50,
+        write_mode: WriteMode = "live",
+    ) -> None:
         self.client = client
         self.sandbox_repo = sandbox_repo
         self.page_size = page_size
+        self.write_mode = write_mode
+        self.write_log: list[dict[str, Any]] = []
         self._labels: list[str] | None = None
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> ToolContext:
+    def from_settings(cls, settings: Settings, *, write_mode: WriteMode = "live") -> ToolContext:
         client = GitHubClient(
             settings.github_token.get_secret_value(),
             settings.sandbox_repo,
             fail_fast_after=TOOL_FAIL_FAST_AFTER_S,
             max_retries=TOOL_MAX_RETRIES,
         )
-        return cls(client, settings.sandbox_repo)
+        return cls(client, settings.sandbox_repo, write_mode=write_mode)
+
+    def write(self, method: str, path: str, body: Any = None) -> Any | None:
+        """Send a write (live) or only record it (dry_run). Returns the JSON body or None.
+
+        The entry is logged before sending, so a failed live write still shows up
+        as attempted; `executed` is set once GitHub accepted it.
+        """
+        entry: dict[str, Any] = {"method": method.upper(), "path": path, "body": body, "executed": False}
+        self.write_log.append(entry)
+        if self.write_mode == "dry_run":
+            return None
+        resp = self.client.request(method, path, json=body)
+        entry["executed"] = True
+        return resp.json() if resp.content else None
 
     def repo_labels(self) -> list[str]:
         """Label names in the repo, fetched once per context (session)."""

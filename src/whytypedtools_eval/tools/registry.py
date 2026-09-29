@@ -13,7 +13,9 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from whytypedtools_eval.tools.add_label import AddLabelInput, AddLabelOutput, add_label
 from whytypedtools_eval.tools.base import ToolContext, ToolError, to_tool_error
+from whytypedtools_eval.tools.get_issue import GetIssueInput, GetIssueOutput, get_issue
 from whytypedtools_eval.tools.list_issues import ListIssuesInput, ListIssuesOutput, list_issues
 from whytypedtools_eval.tools.search_issues import SearchIssuesInput, SearchIssuesOutput, search_issues
 
@@ -26,6 +28,8 @@ class ToolSpec:
     input_model: type[BaseModel]
     output_model: type[BaseModel]
     func: Callable[[ToolContext, Any], BaseModel]
+    # False for tools that change the repository (advertised to MCP clients).
+    read_only: bool = True
 
     @property
     def folder(self) -> Path:
@@ -53,6 +57,8 @@ TOOLS: dict[str, ToolSpec] = {
     for spec in (
         ToolSpec("list_issues", ListIssuesInput, ListIssuesOutput, list_issues),
         ToolSpec("search_issues", SearchIssuesInput, SearchIssuesOutput, search_issues),
+        ToolSpec("get_issue", GetIssueInput, GetIssueOutput, get_issue),
+        ToolSpec("add_label", AddLabelInput, AddLabelOutput, add_label, read_only=False),
     )
 }
 

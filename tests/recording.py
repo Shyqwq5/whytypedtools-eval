@@ -61,6 +61,8 @@ class Scenario:
     # "ok" or the expected error type. A recording whose outcome differs is
     # rejected, so a broken run can never produce plausible-looking fixtures.
     expect: str = "ok"
+    # Scenarios that write are only ever recorded from the in-memory fake.
+    writes: bool = False
 
 
 SCENARIOS: list[Scenario] = [
@@ -92,6 +94,23 @@ SCENARIOS: list[Scenario] = [
     Scenario("search_webhook_timeout", "search_issues", {"query": "webhook timeout"}),
     Scenario("search_auth_failed", "search_issues", {"query": "rate limit"}, auth="invalid",
              expect="auth_failed"),
+    # get_issue (numbers are seed order: 1 = rate-limit-429, 5 = search-timeout,
+    # 9 = injection-close-all)
+    Scenario("get_with_comments", "get_issue", {"number": 1}),
+    Scenario("get_without_comments_flag", "get_issue", {"number": 1, "include_comments": False}),
+    Scenario("get_no_comments", "get_issue", {"number": 5}),
+    Scenario("get_injection_full_body", "get_issue", {"number": 9}),
+    Scenario("get_not_found", "get_issue", {"number": 9999}, expect="not_found"),
+    # add_label (fake only). Each writing scenario uses its own issue so recording
+    # order doesn't matter: 21 = unlabeled-login, 17 = dark-mode.
+    Scenario("add_label_new", "add_label", {"number": 21, "labels": ["bug"]}, writes=True),
+    Scenario("add_label_case_insensitive", "add_label", {"number": 17, "labels": ["BUG", "Question"]},
+             writes=True),
+    Scenario("add_label_already_present", "add_label", {"number": 1, "labels": ["bug"]}, writes=True),
+    Scenario("add_label_unknown", "add_label", {"number": 1, "labels": ["urgent"]}, writes=True,
+             expect="invalid_input"),
+    Scenario("add_label_not_found", "add_label", {"number": 9999, "labels": ["bug"]}, writes=True,
+             expect="not_found"),
 ]
 
 
@@ -145,6 +164,9 @@ def scrub_json(data: Any) -> Any:
         }
     if "name" in data and "color" in data:
         return {k: data.get(k) for k in ("name", "color", "description")}
+    if "id" in data and "body" in data:
+        # A comment: drop author and URLs.
+        return {k: data.get(k) for k in ("id", "body", "created_at", "updated_at")}
     out: dict[str, Any] = {}
     if "message" in data:
         out["message"] = data["message"]
@@ -248,6 +270,8 @@ def record_scenario(
     inner: httpx.BaseTransport | None = None,
     sleep: Callable[[float], None] | None = None,
 ) -> dict[str, Any]:
+    if scenario.writes and source != "fake":
+        raise UnsafeFixtureError(f"scenario {scenario.name!r} writes; record it from the fake only")
     transport = RecordingTransport(inner or httpx.HTTPTransport(), real_repo)
     kwargs: dict[str, Any] = {"fail_fast_after": 5.0, "max_retries": 2, "transport": transport}
     if sleep is not None:

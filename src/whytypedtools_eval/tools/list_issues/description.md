@@ -12,6 +12,6 @@ Parameters:
 - max_results: 1–50, default 20.
 
 Returns each issue's number, title, state, labels, comment count, dates and the
-first 300 characters of the body. `truncated: true` means more issues matched
+first 300 characters of the body (use get_issue for the full text and comments). `truncated: true` means more issues matched
 than were returned. Pull requests are never included. If nothing matched because
 a label does not exist, `hint` lists the unknown labels and the available ones.

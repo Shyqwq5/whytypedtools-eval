@@ -1,0 +1,78 @@
+{
+  "scenario": "get_without_comments_flag",
+  "tool": "get_issue",
+  "args": {
+    "number": 1,
+    "include_comments": false
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "expect": "ok",
+  "source": "recorded",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/1",
+        "params": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4792",
+          "x-ratelimit-reset": "1790718889",
+          "x-ratelimit-used": "208",
+          "x-ratelimit-resource": "core"
+        },
+        "json": {
+          "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+          "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/1",
+          "number": 1,
+          "title": "API returns 429 when rate limit is exceeded",
+          "labels": [
+            {
+              "name": "bug",
+              "color": "d73a4a",
+              "description": "Something isn't working"
+            },
+            {
+              "name": "api",
+              "color": "5319e7",
+              "description": "Public HTTP API"
+            }
+          ],
+          "state": "open",
+          "locked": false,
+          "comments": 2,
+          "created_at": "2026-09-29T20:55:46Z",
+          "updated_at": "2026-09-29T20:55:48Z",
+          "closed_at": null,
+          "body": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.\n",
+          "state_reason": null
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "number": 1,
+      "title": "API returns 429 when rate limit is exceeded",
+      "state": "open",
+      "labels": [
+        "bug",
+        "api"
+      ],
+      "created_at": "2026-09-29",
+      "updated_at": "2026-09-29",
+      "body": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.",
+      "body_truncated": false,
+      "comments_total": 2,
+      "comments": [],
+      "comments_truncated": false
+    }
+  }
+}

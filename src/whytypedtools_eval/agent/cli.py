@@ -21,10 +21,10 @@ from whytypedtools_eval.agent.model import ChatModel
 from whytypedtools_eval.agent.trace import git_info
 from whytypedtools_eval.config import ConfigError, Settings, load_settings
 from whytypedtools_eval.tools import registry
-from whytypedtools_eval.tools.base import ToolContext
+from whytypedtools_eval.tools.base import ToolContext, WriteMode
 
 ModelFactory = Callable[[Settings, argparse.Namespace], ChatModel]
-ToolCallerFactory = Callable[[Settings], ToolCaller]
+ToolCallerFactory = Callable[[Settings, WriteMode], ToolCaller]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -39,6 +39,11 @@ def _parser() -> argparse.ArgumentParser:
                    help="Cohere reasoning setting. api-default sends nothing.")
     p.add_argument("--system-prompt", type=Path, default=DEFAULT_SYSTEM_PROMPT)
     p.add_argument("--trace-dir", type=Path, default=DEFAULT_TRACE_DIR)
+    p.add_argument(
+        "--allow-writes",
+        action="store_true",
+        help="Let write tools change the sandbox. Default: writes are recorded but not sent (dry run).",
+    )
     return p
 
 
@@ -52,8 +57,8 @@ def _cohere_model(settings: Settings, args: argparse.Namespace) -> ChatModel:
     )
 
 
-def _registry_caller(settings: Settings) -> ToolCaller:
-    ctx = ToolContext.from_settings(settings)
+def _registry_caller(settings: Settings, write_mode: WriteMode) -> ToolCaller:
+    ctx = ToolContext.from_settings(settings, write_mode=write_mode)
     return lambda name, args: registry.call_tool(ctx, name, args)
 
 
@@ -83,18 +88,21 @@ def main(
     if settings.cohere_api_key is not None:
         secrets.append(settings.cohere_api_key.get_secret_value())
 
+    write_mode: WriteMode = "live" if args.allow_writes else "dry_run"
     result = run_agent(
         args.task,
         model=model,
-        call_tool=tool_caller_factory(settings),
+        call_tool=tool_caller_factory(settings, write_mode),
         system_prompt=system_prompt,
         max_tool_calls=args.max_tool_calls,
         trace_dir=args.trace_dir,
         secrets=secrets,
-        metadata=git_info(PROJECT_ROOT),
+        metadata={**git_info(PROJECT_ROOT), "config": "tool_e", "write_mode": write_mode},
     )
     print(result.final_answer if result.final_answer is not None else "(no answer)")
     print()
     print(f"status: {result.status}  model calls: {result.model_calls}  tool calls: {result.tool_calls}")
+    if write_mode == "dry_run":
+        print("writes: dry run (nothing was changed on GitHub; use --allow-writes to write)")
     print(f"trace: {result.trace_path}")
     return 0 if result.status == "completed" else 1

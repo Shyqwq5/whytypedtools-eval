@@ -18,7 +18,9 @@ def agent_settings():
 def run_cli(argv, settings, model, calls=None):
     calls = [] if calls is None else calls
 
-    def caller_factory(_settings):
+    def caller_factory(_settings, write_mode):
+        calls.append(("write_mode", write_mode))
+
         def call_tool(name, args):
             calls.append((name, args))
             return {"ok": True, "result": {"issues": [], "returned": 0}}
@@ -39,6 +41,16 @@ def test_prints_answer_and_trace_path(tmp_path, agent_settings, capsys):
     start = read_trace(path)[0]
     assert start["task"] == "Any open issues?"
     assert "git_commit" in start and "git_dirty" in start
+    assert start["write_mode"] == "dry_run" and start["config"] == "tool_e"
+    assert "writes: dry run" in out
+
+
+def test_allow_writes_switches_to_live(tmp_path, agent_settings):
+    calls = []
+    run_cli(["t", "--trace-dir", str(tmp_path), "--allow-writes"], agent_settings, ScriptedModel(answer("ok")), calls)
+    assert calls[0] == ("write_mode", "live")
+    (path,) = tmp_path.rglob("*.jsonl")
+    assert read_trace(path)[0]["write_mode"] == "live"
 
 
 def test_non_completed_status_exits_1(tmp_path, agent_settings, capsys):

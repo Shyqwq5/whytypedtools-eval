@@ -1,0 +1,73 @@
+{
+  "scenario": "add_label_unknown",
+  "tool": "add_label",
+  "args": {
+    "number": 1,
+    "labels": [
+      "urgent"
+    ]
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "expect": "invalid_input",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/labels",
+        "params": {
+          "per_page": "100"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "name": "api",
+            "color": "5319e7",
+            "description": "Public HTTP API"
+          },
+          {
+            "name": "bug",
+            "color": "d73a4a",
+            "description": "Something isn't working"
+          },
+          {
+            "name": "documentation",
+            "color": "0075ca",
+            "description": "Improvements or additions to documentation"
+          },
+          {
+            "name": "enhancement",
+            "color": "a2eeef",
+            "description": "New feature or request"
+          },
+          {
+            "name": "performance",
+            "color": "fbca04",
+            "description": "Speed, memory or throughput"
+          },
+          {
+            "name": "question",
+            "color": "d876e3",
+            "description": "Further information is requested"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "ok": false,
+    "error": {
+      "type": "invalid_input",
+      "message": "Unknown label(s): urgent. Labels cannot be created with this tool. Available labels: api, bug, documentation, enhancement, performance, question.",
+      "retryable": false,
+      "retry_after_seconds": null
+    }
+  }
+}

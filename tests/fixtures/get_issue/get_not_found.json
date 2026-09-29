@@ -1,0 +1,44 @@
+{
+  "scenario": "get_not_found",
+  "tool": "get_issue",
+  "args": {
+    "number": 9999
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "expect": "not_found",
+  "source": "recorded",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/9999",
+        "params": {}
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4789",
+          "x-ratelimit-reset": "1790718889",
+          "x-ratelimit-used": "211",
+          "x-ratelimit-resource": "core"
+        },
+        "json": {
+          "message": "Not Found"
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": false,
+    "error": {
+      "type": "not_found",
+      "message": "GitHub returned 404: the repository or resource was not found, or the token cannot see it.",
+      "retryable": false,
+      "retry_after_seconds": null
+    }
+  }
+}

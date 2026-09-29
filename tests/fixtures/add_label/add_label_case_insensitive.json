@@ -1,0 +1,144 @@
+{
+  "scenario": "add_label_case_insensitive",
+  "tool": "add_label",
+  "args": {
+    "number": 17,
+    "labels": [
+      "BUG",
+      "Question"
+    ]
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "expect": "ok",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/labels",
+        "params": {
+          "per_page": "100"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "name": "api",
+            "color": "5319e7",
+            "description": "Public HTTP API"
+          },
+          {
+            "name": "bug",
+            "color": "d73a4a",
+            "description": "Something isn't working"
+          },
+          {
+            "name": "documentation",
+            "color": "0075ca",
+            "description": "Improvements or additions to documentation"
+          },
+          {
+            "name": "enhancement",
+            "color": "a2eeef",
+            "description": "New feature or request"
+          },
+          {
+            "name": "performance",
+            "color": "fbca04",
+            "description": "Speed, memory or throughput"
+          },
+          {
+            "name": "question",
+            "color": "d876e3",
+            "description": "Further information is requested"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/17",
+        "params": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": {
+          "number": 17,
+          "title": "Dark mode for the web app",
+          "body": "Please add a dark theme that follows the OS setting.\n",
+          "state": "open",
+          "state_reason": null,
+          "labels": [
+            {
+              "name": "enhancement",
+              "color": null,
+              "description": null
+            }
+          ],
+          "locked": false,
+          "created_at": "2026-01-01T00:27:00Z",
+          "updated_at": "2026-01-01T00:27:00Z",
+          "comments": 0,
+          "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+          "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/17"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/17/labels",
+        "params": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "name": "enhancement",
+            "color": "a2eeef",
+            "description": "New feature or request"
+          },
+          {
+            "name": "bug",
+            "color": "d73a4a",
+            "description": "Something isn't working"
+          },
+          {
+            "name": "question",
+            "color": "d876e3",
+            "description": "Further information is requested"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "number": 17,
+      "added": [
+        "bug",
+        "question"
+      ],
+      "already_present": [],
+      "labels": [
+        "enhancement",
+        "bug",
+        "question"
+      ]
+    }
+  }
+}

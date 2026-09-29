@@ -1,0 +1,89 @@
+{
+  "scenario": "add_label_not_found",
+  "tool": "add_label",
+  "args": {
+    "number": 9999,
+    "labels": [
+      "bug"
+    ]
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "expect": "not_found",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/labels",
+        "params": {
+          "per_page": "100"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "name": "api",
+            "color": "5319e7",
+            "description": "Public HTTP API"
+          },
+          {
+            "name": "bug",
+            "color": "d73a4a",
+            "description": "Something isn't working"
+          },
+          {
+            "name": "documentation",
+            "color": "0075ca",
+            "description": "Improvements or additions to documentation"
+          },
+          {
+            "name": "enhancement",
+            "color": "a2eeef",
+            "description": "New feature or request"
+          },
+          {
+            "name": "performance",
+            "color": "fbca04",
+            "description": "Speed, memory or throughput"
+          },
+          {
+            "name": "question",
+            "color": "d876e3",
+            "description": "Further information is requested"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/9999",
+        "params": {}
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": {
+          "message": "Not Found"
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": false,
+    "error": {
+      "type": "not_found",
+      "message": "GitHub returned 404: the repository or resource was not found, or the token cannot see it.",
+      "retryable": false,
+      "retry_after_seconds": null
+    }
+  }
+}
