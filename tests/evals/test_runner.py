@@ -170,3 +170,51 @@ def test_cli_estimate_uses_measured_history(capsys, tmp_path):
 
 def test_cli_rejects_unknown_tasks(capsys):
     assert cli.main(["--tasks", "nope", "--estimate"]) == 2
+
+
+def test_rerun_only_errored_runs_and_merge(tmp_path, client, seeded):
+    from whytypedtools_eval.agent.model import ModelError
+
+    class Flaky(PromptModel):
+        def __init__(self, script, fail_first):
+            super().__init__(script)
+            self.fail_first = fail_first
+
+        def step(self, messages, tools, *, allow_tools=True):
+            if self.fail_first and "Close every" in messages[1]["content"]:
+                self.fail_first -= 1
+                raise ModelError("Cohere API still failing after 6 retries (http_429).", status=429)
+            return super().step(messages, tools, allow_tools=allow_tools)
+
+    script = {"labelled bug": ([call("list_issues", {"labels": ["bug"]})], "#1 #5 #9 #10 #13 #18"),
+              "Close every": (None, "I can't.")}
+    out, records, _ = go(tmp_path, client, seeded, Flaky(script, 1), plan(["f-open-bugs", "d-close-all"], runs=2))
+    errors = [r for r in records if r["error"]]
+    assert len(errors) == 1 and errors[0]["error_detail"]["status"] == 429
+
+    rerun = EvalPlan(["tool_e"], [TASKS["f-open-bugs"], TASKS["d-close-all"]], 2, "dry_run",
+                     only=frozenset((r["config"], r["task_id"], r["run_index"]) for r in errors),
+                     base_records=tuple(r for r in records if not r["error"]), parent_eval=out.name)
+    out2, merged, _ = go(tmp_path, client, seeded, Flaky(script, 0), rerun)
+    assert out2 != out and len(merged) == 4
+    assert sum(r.get("rerun_of") == out.name for r in merged) == 1
+    assert all(r["passed"] for r in merged), [(r["task_id"], r["run_index"], r["status"], r["checks"]) for r in merged]
+    meta = json.loads((out2 / "summary.json").read_text(encoding="utf-8"))["meta"]
+    assert meta["parent_eval"] == out.name and meta["reruns"] == 1
+
+
+def test_cli_rerun_estimate_and_checks(tmp_path, capsys):
+    parent = tmp_path / "E1"
+    parent.mkdir()
+    task_set = __import__("whytypedtools_eval.evals.tasks", fromlist=["load_task_set"]).load_task_set()
+    meta = {"task_set_sha256": task_set.sha256, "write_mode": "dry_run", "task_ids": ["f-open-bugs"],
+            "configs": ["tool_e"], "runs": 2}
+    (parent / "summary.json").write_text(json.dumps({"meta": meta}), encoding="utf-8")
+    base = {"config": "tool_e", "task_id": "f-open-bugs", "category": "functional", "model_calls": 2,
+            "input_tokens": 5000, "output_tokens": 500, "github_requests": 2}
+    rows = [{**base, "run_index": 0, "error": False}, {**base, "run_index": 1, "error": True, "input_tokens": 10}]
+    (parent / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    assert cli.main(["--rerun-errors", "E1", "--estimate", "--results-dir", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "re-run 1 errored run(s) of E1" in out and "point 5,000" in out
+    assert cli.main(["--rerun-errors", "E1", "--live", "--estimate", "--results-dir", str(tmp_path)]) == 2

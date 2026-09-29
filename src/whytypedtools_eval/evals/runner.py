@@ -64,6 +64,11 @@ class EvalPlan:
     max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS
     task_set: str = ""
     task_set_sha256: str = ""
+    # Rerun mode: run only these (config, task_id, run_index) and merge them with
+    # `base_records` (the parent eval's other runs) into a new results folder.
+    only: frozenset[tuple[str, str, int]] | None = None
+    base_records: tuple[dict[str, Any], ...] = ()
+    parent_eval: str | None = None
 
 
 class _Sanitiser:
@@ -122,14 +127,18 @@ def run_eval(
     eval_id = new_run_id(started)
     out = results_dir / eval_id
     out.mkdir(parents=True, exist_ok=False)
-    records: list[dict[str, Any]] = []
-    total = plan.runs * len(plan.tasks) * len(plan.configs)
+    records: list[dict[str, Any]] = list(plan.base_records)
+    total = len(plan.only) if plan.only is not None else plan.runs * len(plan.tasks) * len(plan.configs)
     done = 0
 
     with (out / "runs.jsonl").open("x", encoding="utf-8", newline="\n") as runs_file:
+        for record in plan.base_records:
+            runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
         for run_index in range(plan.runs):
             for task in plan.tasks:
                 for config in plan.configs:
+                    if plan.only is not None and (config, task.id, run_index) not in plan.only:
+                        continue
                     prompt = prompt_for(task, keymap)
                     setup = CONFIGS[config](tool_client, repo, plan.write_mode, prompt)
                     requests_before = tool_client.requests_made
@@ -163,7 +172,7 @@ def run_eval(
                     record.update(config=config, run_index=run_index, run_id=result.run_id,
                                   trace=result.trace_path.name, drift=None,
                                   github_requests=tool_client.requests_made - requests_before,
-                                  sandbox_requests=0)
+                                  sandbox_requests=0, rerun_of=plan.parent_eval)
 
                     if plan.write_mode == "live" and any(w["executed"] for w in setup.ctx.write_log):
                         sb_before = _sandbox_requests(sandbox)
@@ -198,6 +207,8 @@ def run_eval(
         "tasks_sha256": sha256_json([t.model_dump() for t in plan.tasks]),
         "write_mode": plan.write_mode,
         "max_tool_calls": plan.max_tool_calls,
+        "parent_eval": plan.parent_eval,
+        "reruns": len(records) - len(plan.base_records) if plan.parent_eval else 0,
         "system_prompt_sha256": sha256_text(system_prompt.text),
         "github_requests": {
             "tools": sum(r["github_requests"] for r in records),

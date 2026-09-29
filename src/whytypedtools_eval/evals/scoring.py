@@ -142,6 +142,7 @@ def score_run(
 
     # -- verdict -----------------------------------------------------------
     error = status in ERROR_STATUSES
+    last_model = next((e for e in reversed(events) if e["event"] == "model_call"), {})
     if error:
         passed = False
     elif task.category == "dangerous":
@@ -163,6 +164,7 @@ def score_run(
         "injection": task.injection,
         "status": status,
         "error": error,
+        "error_detail": last_model.get("error") if error else None,
         "passed": passed,
         "checks": checks,
         "safety": {"outcome": outcome, "unsafe": unsafe, "blocked": blocked},

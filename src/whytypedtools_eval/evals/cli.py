@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -13,7 +14,7 @@ from whytypedtools_eval.agent.model import ChatModel
 from whytypedtools_eval.agent.trace import git_info
 from whytypedtools_eval.config import ConfigError, Settings, load_settings
 from whytypedtools_eval.evals.configs import CONFIGS
-from whytypedtools_eval.evals.estimate import estimate, format_estimate
+from whytypedtools_eval.evals.estimate import estimate, estimate_reruns, format_estimate
 from whytypedtools_eval.evals.runner import EvalError, EvalPlan, SandboxControl, run_eval
 from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_task_set
 from whytypedtools_eval.github import GitHubClient, GitHubError
@@ -72,18 +73,30 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--tasks-file", type=Path, default=DEFAULT_TASKS)
     p.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     p.add_argument("--trace-dir", type=Path, default=DEFAULT_TRACE_DIR)
+    p.add_argument("--max-model-rpm", type=float, metavar="N",
+                   help="Pace Cohere requests to at most N per minute (client side).")
+    p.add_argument("--rerun-errors", metavar="EVAL_ID",
+                   help="Re-run only the errored runs of an earlier eval (same task set and mode) and "
+                        "write a merged result to a new folder.")
     return p
 
 
-def _cohere(settings: Settings) -> ChatModel:
-    return CohereModel.from_settings(settings)
+def _cohere(settings: Settings, min_interval_s: float) -> ChatModel:
+    return CohereModel.from_settings(settings, min_interval_s=min_interval_s)
+
+
+def _load_parent(results_dir: Path, eval_id: str) -> tuple[dict, list[dict]]:
+    folder = results_dir / eval_id
+    meta = json.loads((folder / "summary.json").read_text(encoding="utf-8"))["meta"]
+    records = [json.loads(line) for line in (folder / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
+    return meta, records
 
 
 def main(
     argv: Sequence[str] | None = None,
     *,
     settings: Settings | None = None,
-    model_factory: Callable[[Settings], ChatModel] = _cohere,
+    model_factory: Callable[[Settings, float], ChatModel] = _cohere,
     sandbox_factory: Callable[[Settings], SandboxControl] = GitHubSandbox,
     client_factory: Callable[[Settings], GitHubClient] | None = None,
 ) -> int:
@@ -107,7 +120,36 @@ def main(
         print("error: no tasks selected", file=sys.stderr)
         return 2
 
+    mode = "live" if args.live else "dry_run"
+    rerun: dict = {}
+    if args.rerun_errors:
+        try:
+            meta, parent = _load_parent(args.results_dir, args.rerun_errors)
+        except OSError as exc:
+            print(f"error: cannot read eval {args.rerun_errors}: {exc}", file=sys.stderr)
+            return 2
+        if meta.get("task_set_sha256") != task_set.sha256 or meta.get("write_mode") != mode:
+            print("error: the parent eval used a different task set or write mode", file=sys.stderr)
+            return 2
+        errors = [r for r in parent if r["error"]]
+        if not errors:
+            print(f"eval {args.rerun_errors} has no errored runs; nothing to do")
+            return 0
+        ids = set(meta["task_ids"])
+        tasks = [t for t in task_set.tasks if t.id in ids]
+        args.configs, args.runs = meta["configs"], meta["runs"]
+        rerun = {
+            "only": frozenset((r["config"], r["task_id"], r["run_index"]) for r in errors),
+            "base_records": tuple(r for r in parent if not r["error"]),
+            "parent_eval": args.rerun_errors,
+            "errors": errors,
+        }
+
     if args.estimate:
+        if rerun:
+            print(f"plan: re-run {len(rerun['errors'])} errored run(s) of {rerun['parent_eval']}; mode {mode}")
+            print(format_estimate(estimate_reruns(rerun["errors"], list(rerun["base_records"]))))
+            return 0
         print(f"plan: task set {task_set.name}, {len(tasks)} task(s) x {args.runs} run(s) x {', '.join(args.configs)}; "
               f"mode {'live' if args.live else 'dry-run'}")
         print(format_estimate(estimate(tasks, args.configs, args.runs, args.results_dir)))
@@ -115,7 +157,7 @@ def main(
 
     try:
         settings = settings or load_settings(PROJECT_ROOT / ".env")
-        model = model_factory(settings)
+        model = model_factory(settings, 60.0 / args.max_model_rpm if args.max_model_rpm else 0.0)
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -129,8 +171,10 @@ def main(
     seed = load_seed(SEED_FILE)
     exposure = {i.key: i.safety_test.exposure for i in seed.issues if i.safety_test}
 
-    plan = EvalPlan(args.configs, tasks, args.runs, "live" if args.live else "dry_run", args.max_tool_calls,
-                    task_set=task_set.name, task_set_sha256=task_set.sha256)
+    plan = EvalPlan(args.configs, tasks, args.runs, mode, args.max_tool_calls,
+                    task_set=task_set.name, task_set_sha256=task_set.sha256,
+                    only=rerun.get("only"), base_records=rerun.get("base_records", ()),
+                    parent_eval=rerun.get("parent_eval"))
     try:
         run_eval(
             plan,

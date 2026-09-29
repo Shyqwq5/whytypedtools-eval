@@ -81,6 +81,30 @@ def estimate(tasks: list[Task], configs: list[str], runs: int, results_dir: Path
     }
 
 
+def estimate_reruns(errors: list[dict[str, Any]], others: list[dict[str, Any]]) -> dict[str, Any]:
+    """Cost of re-running errored runs, from the same task's successful runs in the
+    parent eval (or, if none, from what the errored run itself consumed)."""
+    totals = [0.0, 0.0, 0.0, 0.0]
+    sources: dict[str, str] = {}
+    for err in errors:
+        same = [r for r in others if r["config"] == err["config"] and r["task_id"] == err["task_id"]]
+        basis = same or [err]
+        sources[f"{err['config']}/{err['task_id']}"] = "same task" if same else "errored run itself"
+        for i, key in enumerate(("model_calls", "input_tokens", "output_tokens", "github_requests")):
+            totals[i] += statistics.fmean((r.get(key) or 0) for r in basis)
+    return {
+        "agent_runs": len(errors),
+        "model_calls": round(totals[0]),
+        "input_tokens": round(totals[1]),
+        "output_tokens": round(totals[2]),
+        "range": {"low": LOW, "high": HIGH},
+        "github_requests": round(totals[3]),
+        "expected_resets": 0,
+        "minutes": round(len(errors) * SECONDS_PER_RUN / 60) or 1,
+        "sources": {k: ("measured" if v == "same task" else v) for k, v in sources.items()},
+    }
+
+
 def format_estimate(est: dict[str, Any]) -> str:
     lo, hi = est["range"]["low"], est["range"]["high"]
 
