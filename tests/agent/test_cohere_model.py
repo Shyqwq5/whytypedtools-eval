@@ -119,7 +119,8 @@ def test_tools_disabled_and_no_seed():
     model, _ = make(client, seed=None)
     model.step(MESSAGES, registry.list_tools(), allow_tools=False)
     req = client.requests[0]
-    assert req["tool_choice"] == "NONE"
+    # Command A+ rejects tool_choice (HTTP 400), so disabling tools sends nothing extra.
+    assert "tool_choice" not in req
     assert len(req["tools"]) == len(registry.TOOLS)  # still declared for earlier tool messages
     assert "seed" not in req
     assert model.describe()["seed"] is None
@@ -200,11 +201,31 @@ def test_retry_after_too_long_gives_up():
 def test_backoff_grows_and_gives_up():
     client = FakeClient(*[ApiError(status_code=503, body={}) for _ in range(MAX_RETRIES + 1)])
     model, sleeps = make(client)
-    with pytest.raises(ModelError, match="after 4 retries") as exc:
+    with pytest.raises(ModelError, match=f"after {MAX_RETRIES} retries") as exc:
         model.step(MESSAGES, [])
     assert len(sleeps) == MAX_RETRIES
     assert sleeps == sorted(sleeps)
     assert len(exc.value.retries) == MAX_RETRIES
+    # Backoff is capped instead of failing, and together outlasts a one-minute window.
+    assert max(sleeps) <= 60 and sum(sleeps) > 60
+
+
+def test_pacing_spaces_out_requests():
+    now = [0.0]
+    sleeps = []
+
+    def sleep(s):
+        sleeps.append(s)
+        now[0] += s
+
+    client = FakeClient(text_response(), text_response(), text_response())
+    model = CohereModel(client, "m", min_interval_s=3.0, sleep=sleep, clock=lambda: now[0])
+    model.step(MESSAGES, [])
+    now[0] += 1.0
+    model.step(MESSAGES, [])
+    now[0] += 5.0
+    model.step(MESSAGES, [])
+    assert sleeps == [2.0]  # only the second call was too early
 
 
 def test_transport_errors_are_retried():

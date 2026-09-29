@@ -5,6 +5,11 @@ definitions are converted from the registry specs; nothing is written by hand.
 
 Retries are done here, not by the SDK (its retries are disabled), so every retry
 is visible in the trace. Error messages never include response bodies or headers.
+
+`tool_choice` is never sent: command-a-plus-05-2026 rejects it with HTTP 400
+("tool_choice is not supported for this model", found in the v2 baseline). When
+the loop disables tools (budget reached), the tools stay declared and the loop
+ignores any further tool calls; the budget_exceeded results ask the model to answer.
 """
 
 from __future__ import annotations
@@ -29,9 +34,12 @@ DEFAULT_SEED = 0
 # explicitly so a silent API default change cannot alter results.
 DEFAULT_THINKING = "enabled"
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
-MAX_RETRIES = 4
+# 2, 4, 8, 16, 32, 60 s (with jitter): about 2 minutes, enough to outlast a
+# per-minute rate limit window. 4 retries (~25 s) was not, in the v2 baseline.
+MAX_RETRIES = 6
 BACKOFF_BASE_S = 2.0
-# Longest single wait; a Retry-After above this fails the run instead of blocking.
+# Longest single wait. Backoff is capped at this; a Retry-After above it fails the
+# run instead of blocking.
 MAX_WAIT_S = 60.0
 REQUEST_TIMEOUT_S = 120.0
 
@@ -135,7 +143,9 @@ class CohereModel:
         seed: int | None = DEFAULT_SEED,
         thinking: str | None = DEFAULT_THINKING,
         max_retries: int = MAX_RETRIES,
+        min_interval_s: float = 0.0,
         sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
         rng: random.Random | None = None,
     ) -> None:
         self._client = client
@@ -144,7 +154,11 @@ class CohereModel:
         self.seed = seed
         self.thinking = thinking
         self.max_retries = max_retries
+        # Client-side pacing: at least this long between request starts (0 = off).
+        self.min_interval_s = min_interval_s
         self._sleep = sleep
+        self._clock = clock
+        self._last_request: float | None = None
         self._rng = rng or random.Random()
 
     @classmethod
@@ -175,11 +189,11 @@ class CohereModel:
             request["seed"] = self.seed
         if self.thinking is not None:
             request["thinking"] = {"type": self.thinking}
-        if not allow_tools:
-            request["tool_choice"] = "NONE"
+        # allow_tools=False sends nothing extra: see the module docstring.
 
         retries: list[Retry] = []
         while True:
+            self._pace()
             try:
                 resp = self._client.chat(**request)
             except ApiError as exc:
@@ -199,7 +213,7 @@ class CohereModel:
                     status=status,
                     retries=retries,
                 )
-            backoff = BACKOFF_BASE_S * 2 ** len(retries) * (0.5 + self._rng.random() / 2)
+            backoff = min(MAX_WAIT_S, BACKOFF_BASE_S * 2 ** len(retries) * (0.5 + self._rng.random() / 2))
             wait = max(hinted or 0.0, backoff)
             if wait > MAX_WAIT_S:
                 raise ModelError(
@@ -209,3 +223,10 @@ class CohereModel:
                 )
             retries.append(Retry(reason=reason, wait_seconds=round(wait, 2)))
             self._sleep(wait)
+
+    def _pace(self) -> None:
+        if self.min_interval_s > 0 and self._last_request is not None:
+            remaining = self.min_interval_s - (self._clock() - self._last_request)
+            if remaining > 0:
+                self._sleep(remaining)
+        self._last_request = self._clock()
