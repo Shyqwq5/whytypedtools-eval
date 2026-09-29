@@ -112,3 +112,66 @@ def test_auth_header_sent(client, mock_api):
     route = mock_api.get(f"/repos/{REPO}/labels").mock(return_value=httpx.Response(200, json=[]))
     client.get(f"repos/{REPO}/labels")
     assert route.calls[0].request.headers["Authorization"] == "Bearer github_pat_test"
+
+
+def test_default_policy_is_patient(mock_api, sleeps):
+    # Seed/reset behaviour: long waits are slept (capped by max_wait), then retried.
+    c = GitHubClient("t", REPO, write_interval=0, max_wait=900, sleep=sleeps.append)
+    route = mock_api.get(f"/repos/{REPO}/labels").mock(
+        side_effect=[httpx.Response(429, headers={"Retry-After": "120"}), httpx.Response(200, json=[])]
+    )
+    c.get(f"repos/{REPO}/labels")
+    assert sleeps == [120.0]
+    assert route.call_count == 2
+
+
+def test_long_wait_is_capped_by_max_wait(mock_api, sleeps):
+    c = GitHubClient("t", REPO, write_interval=0, max_wait=30, sleep=sleeps.append)
+    mock_api.get(f"/repos/{REPO}/labels").mock(
+        side_effect=[httpx.Response(429, headers={"Retry-After": "600"}), httpx.Response(200, json=[])]
+    )
+    c.get(f"repos/{REPO}/labels")
+    assert sleeps == [30.0]
+
+
+def test_fail_fast_raises_without_sleeping(mock_api, sleeps):
+    c = GitHubClient("t", REPO, write_interval=0, fail_fast_after=5, sleep=sleeps.append)
+    route = mock_api.get(f"/repos/{REPO}/labels").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "42"})
+    )
+    with pytest.raises(RateLimitError) as exc:
+        c.get(f"repos/{REPO}/labels")
+    assert exc.value.retry_after == 42.0
+    assert exc.value.status == 429
+    assert sleeps == []
+    assert route.call_count == 1
+
+
+def test_fail_fast_uses_reset_header(mock_api, sleeps):
+    c = GitHubClient("t", REPO, write_interval=0, fail_fast_after=5, sleep=sleeps.append,
+                     clock=lambda: 1000.0)
+    mock_api.get(f"/repos/{REPO}/labels").mock(
+        return_value=httpx.Response(403, headers={"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1300"},
+                                    json={"message": "API rate limit exceeded"})
+    )
+    with pytest.raises(RateLimitError) as exc:
+        c.get(f"repos/{REPO}/labels")
+    assert exc.value.retry_after == 301.0
+    assert sleeps == []
+
+
+def test_fail_fast_still_waits_out_short_limits(mock_api, sleeps):
+    c = GitHubClient("t", REPO, write_interval=0, fail_fast_after=5, sleep=sleeps.append)
+    mock_api.get(f"/repos/{REPO}/labels").mock(
+        side_effect=[httpx.Response(429, headers={"Retry-After": "2"}), httpx.Response(200, json=[])]
+    )
+    assert c.get(f"repos/{REPO}/labels") == []
+    assert sleeps == [2.0]
+
+
+def test_exhausted_retries_report_retry_after(mock_api, sleeps):
+    c = GitHubClient("t", REPO, max_retries=1, write_interval=0, sleep=sleeps.append)
+    mock_api.get(f"/repos/{REPO}/labels").mock(return_value=httpx.Response(429, headers={"Retry-After": "3"}))
+    with pytest.raises(RateLimitError) as exc:
+        c.get(f"repos/{REPO}/labels")
+    assert exc.value.retry_after == 3.0

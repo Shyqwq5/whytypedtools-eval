@@ -26,7 +26,14 @@ class GitHubError(RuntimeError):
 
 
 class RateLimitError(GitHubError):
-    """Raised when rate limiting persists after all retries."""
+    """Raised when rate limiting persists after all retries, or immediately in fail-fast mode.
+
+    `retry_after` is the number of seconds GitHub asked us to wait.
+    """
+
+    def __init__(self, status: int, method: str, path: str, message: str, retry_after: float) -> None:
+        super().__init__(status, method, path, message)
+        self.retry_after = retry_after
 
 
 class GitHubClient:
@@ -38,6 +45,11 @@ class GitHubClient:
       or until `X-RateLimit-Reset`.
     - Writes are spaced at least `write_interval` seconds apart to avoid GitHub's
       secondary (content-creation) rate limit.
+
+    Rate-limit policy: by default the client is patient (waits up to `max_wait`
+    per attempt), which suits batch scripts like seed/reset. Interactive callers
+    such as agent tools set `fail_fast_after`: any required wait longer than that
+    raises `RateLimitError` immediately instead of sleeping.
     """
 
     def __init__(
@@ -49,6 +61,7 @@ class GitHubClient:
         max_retries: int = 5,
         write_interval: float = 1.0,
         max_wait: float = 900.0,
+        fail_fast_after: float | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.time,
         transport: httpx.BaseTransport | None = None,
@@ -58,6 +71,7 @@ class GitHubClient:
         self._max_retries = max_retries
         self._write_interval = write_interval
         self._max_wait = max_wait
+        self._fail_fast_after = fail_fast_after
         self._sleep = sleep
         self._clock = clock
         self._last_write: float | None = None
@@ -127,8 +141,15 @@ class GitHubClient:
             wait = self._rate_limit_wait(resp)
             if wait is None:
                 break
+            if self._fail_fast_after is not None and wait > self._fail_fast_after:
+                raise RateLimitError(
+                    resp.status_code, method, path, f"rate limited; retry after {wait:.0f}s", wait
+                )
+            wait = min(wait, self._max_wait)
             if attempt == self._max_retries:
-                raise RateLimitError(resp.status_code, method, path, "rate limited; retries exhausted")
+                raise RateLimitError(
+                    resp.status_code, method, path, "rate limited; retries exhausted", wait
+                )
             log.warning("Rate limited on %s %s; waiting %.0fs (attempt %d)", method, path, wait, attempt + 1)
             self._sleep(wait)
 
@@ -146,7 +167,10 @@ class GitHubClient:
             self._sleep(remaining)
 
     def _rate_limit_wait(self, resp: httpx.Response) -> float | None:
-        """Return seconds to wait if `resp` is a rate-limit response, else None."""
+        """Return seconds GitHub asks us to wait if `resp` is a rate-limit response, else None.
+
+        The value is not capped by `max_wait`; the caller decides what to do with it.
+        """
         if resp.status_code not in (403, 429):
             return None
         retry_after = resp.headers.get("Retry-After")
@@ -162,7 +186,7 @@ class GitHubClient:
         else:
             # A plain 403 is a permission problem, not a rate limit.
             return None
-        return min(max(wait, 1.0), self._max_wait)
+        return max(wait, 1.0)
 
 
 def _to_float(value: str, default: float) -> float:
