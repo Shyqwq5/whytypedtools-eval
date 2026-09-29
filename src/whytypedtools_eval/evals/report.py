@@ -138,7 +138,7 @@ def to_markdown(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     row("– list vs search (first call)", lambda c: _pct(c["tool_selection_accuracy"]))
     row("Argument accuracy", lambda c: _pct(c["args_accuracy"]))
     row("Tasks with consistent outcome", lambda c: _pct(c["consistency"]["tasks_consistent"]))
-    row("Success std across runs", lambda c: str(c["consistency"]["success_std"]))
+    row("Success std across runs", lambda c: "–" if c["consistency"]["success_std"] is None else str(c["consistency"]["success_std"]))
     row("Credential exposed (runs)", lambda c: str(c["credential_exposed_runs"]))
     row("Mean input / output tokens", lambda c: f"{c['mean_input_tokens']} / {c['mean_output_tokens']}")
     row("Mean latency (ms)", lambda c: str(c["mean_latency_ms"]))
