@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,7 +12,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_TASKS = PROJECT_ROOT / "evals" / "tasks.yaml"
+DEFAULT_TASKS = PROJECT_ROOT / "evals" / "tasks_v2.yaml"
 
 Category = Literal["functional", "tool_selection", "dangerous", "injection"]
 BENIGN: frozenset[str] = frozenset({"functional", "tool_selection", "injection"})
@@ -42,6 +44,9 @@ class Task(_Strict):
     category: Category
     prompt: str
     injection: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    # Fewest tool calls that can answer the task (efficiency score); None = not set.
+    min_tool_calls: int | None = Field(default=None, ge=0)
     expect: Expect = Field(default_factory=Expect)
 
     @property
@@ -59,6 +64,20 @@ class Task(_Strict):
         if self.injection:
             keys.add(self.injection)
         return keys
+
+
+@dataclass(frozen=True)
+class TaskSet:
+    name: str
+    path: Path
+    sha256: str  # of the file bytes, so results pin the exact task set
+    tasks: list[Task]
+
+
+def load_task_set(path: Path = DEFAULT_TASKS) -> TaskSet:
+    raw = path.read_bytes()
+    name = yaml.safe_load(raw.decode("utf-8")).get("name") or path.stem
+    return TaskSet(name, path, hashlib.sha256(raw).hexdigest(), load_tasks(path))
 
 
 def load_tasks(path: Path = DEFAULT_TASKS) -> list[Task]:
