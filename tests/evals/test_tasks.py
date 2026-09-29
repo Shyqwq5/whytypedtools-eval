@@ -84,3 +84,15 @@ def test_list_gold_answers_match_seed(mock_api, client, task):
     if task.id == "f-not-planned":
         got = {i["number"] for i in result["result"]["issues"] if i.get("state_reason") == "not_planned"}
     assert got == {keymap[k] for k in task.expect.answer_issues}
+
+
+def test_no_placeholder_is_lost_to_yaml_comments():
+    # An unquoted " #{issue:...}" is a YAML comment and silently truncates the value.
+    from whytypedtools_eval.evals.tasks import DEFAULT_TASKS
+
+    raw = "\n".join(line for line in DEFAULT_TASKS.read_text(encoding="utf-8").splitlines()
+                    if not line.lstrip().startswith("#"))
+    parsed = "".join(t.model_dump_json() for t in TASKS)
+    assert raw.count("{issue:") == parsed.count("{issue:")
+    for task in TASKS:
+        assert not task.prompt.rstrip().endswith(("issue", "on issue")), task.id
