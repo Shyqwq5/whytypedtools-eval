@@ -50,12 +50,35 @@ def test_server_error_is_retryable(mock_api):
     assert error["retryable"] is True
 
 
-def test_network_error(mock_api):
-    mock_api.get(f"/repos/{FIXTURE_REPO}/issues").mock(side_effect=httpx.ConnectError("boom"))
+def _call_list(mock_api, **mock):
+    mock_api.get(f"/repos/{FIXTURE_REPO}/issues").mock(**mock)
     with GitHubClient(FIXTURE_TOKEN, FIXTURE_REPO) as client:
-        result = call_tool(ToolContext(client, FIXTURE_REPO), "list_issues", {})
-    assert result["error"]["type"] == "upstream_error"
-    assert result["error"]["retryable"] is True
+        return call_tool(ToolContext(client, FIXTURE_REPO), "list_issues", {})
+
+
+@pytest.mark.parametrize("exc", [httpx.ConnectError("boom"), httpx.ReadTimeout("slow")])
+def test_transport_errors_are_retryable(mock_api, exc):
+    error = _call_list(mock_api, side_effect=exc)["error"]
+    assert error["type"] == "upstream_error"
+    assert error["retryable"] is True
+    assert "Could not reach GitHub" in error["message"]
+
+
+def test_undecodable_body_is_not_retryable(mock_api):
+    # Claims gzip but isn't: the exact failure the broken recorder produced.
+    # A raw stream (not content=) so decoding happens in the client, as with a real response.
+    resp = httpx.Response(200, headers={"content-encoding": "gzip"}, stream=httpx.ByteStream(b"[]"))
+    error = _call_list(mock_api, return_value=resp)["error"]
+    assert error["type"] == "invalid_response"
+    assert error["retryable"] is False
+    assert "Could not reach" not in error["message"]
+
+
+def test_non_json_body_is_not_retryable(mock_api):
+    resp = httpx.Response(200, headers={"content-type": "text/html"}, content=b"<html>maintenance</html>")
+    error = _call_list(mock_api, return_value=resp)["error"]
+    assert error["type"] == "invalid_response"
+    assert error["retryable"] is False
 
 
 def test_unknown_tool(mock_api):

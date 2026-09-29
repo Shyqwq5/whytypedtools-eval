@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
+import json
+
 import httpx
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
 
@@ -132,6 +134,7 @@ ErrorType = Literal[
     "validation_failed",
     "rate_limited",
     "upstream_error",
+    "invalid_response",
 ]
 
 
@@ -205,10 +208,21 @@ def to_tool_error(exc: Exception) -> ToolError:
         return ToolError("upstream_error", f"GitHub returned an unexpected status {exc.status}.")
     if isinstance(exc, SandboxGuardError):
         return ToolError("forbidden", "The request was blocked by the sandbox guard.")
-    if isinstance(exc, httpx.HTTPError):
+    if isinstance(exc, httpx.TransportError):
+        # Connection, timeout and protocol failures: transient, worth retrying.
         return ToolError(
             "upstream_error",
             f"Could not reach GitHub ({type(exc).__name__}). Retrying later may work.",
             retryable=True,
         )
+    if isinstance(exc, (httpx.DecodingError, json.JSONDecodeError)):
+        # GitHub answered, but the body could not be decoded or parsed. Retrying
+        # the same call will almost certainly fail the same way.
+        return ToolError(
+            "invalid_response",
+            f"GitHub sent a response that could not be read ({type(exc).__name__}). "
+            "Retrying will not help.",
+        )
+    if isinstance(exc, httpx.HTTPError):
+        return ToolError("upstream_error", f"HTTP error talking to GitHub ({type(exc).__name__}).")
     raise exc
