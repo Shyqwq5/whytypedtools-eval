@@ -97,6 +97,19 @@ headers, and replace your repo name with `sandbox-owner/whytypedtools-sandbox`. 
 recorder refuses to write any fixture that still contains your token or username.
 `--fake` regenerates the fixtures from an in-memory fake instead.
 
+## Findings
+
+Differences between the real GitHub API and our assumptions or in-memory fake,
+found by recording against a real sandbox.
+
+| Area | What we observed | Consequence |
+|---|---|---|
+| `GET /issues?sort=comments` | Real API ranked three issues with 1 comment above one with 2 comments (counts themselves were correct). Suspected stale sort key after comments were deleted and re-created by reset; unconfirmed. | Comment-count ordering is never used in eval gold answers. Being re-checked by a later re-recording; if still wrong, `sort=comments` will be removed from `list_issues`. |
+| Search `best_match` order | Real search orders by relevance; the fake orders by issue number. Result sets and `total_count` were identical in all recorded scenarios (no tokenisation surprises for our queries). | Tests never assert `best_match` order. The fake is not changed. |
+| 422 wording (too many operators) | Real message: "More than five AND / OR / NOT operators were used." | Fake updated to match. |
+| Compressed responses | GitHub gzips most responses; this broke the first version of the fixture recorder. | Fixed; regression test added. |
+| Search index lag | `wait_for_search_index` succeeded on the first check in every real run so far, but those runs made no writes, so actual lag after writes is still unmeasured. | Keep waiting after seed/reset; measure on the next reset that makes changes. |
+
 ## Development
 
 ```bash

@@ -290,6 +290,10 @@ class FakeGitHub:
             key = {"created": "number", "updated": "updated_at", "comments": "comments"}[sort]
             matched.sort(key=lambda i: (i[key], i["number"]), reverse=params.get("order", "desc") == "desc")
         else:
+            # best_match: real GitHub ranks by relevance; the fake just orders by
+            # number. Result sets and total_count matched the real API in every
+            # recorded scenario; only this order differs (see README "Findings").
+            # Tests must not depend on best_match order.
             matched.sort(key=lambda i: i["number"])
         per_page = min(int(params.get("per_page", 30)), self.max_page_size)
         page = int(params.get("page", 1))

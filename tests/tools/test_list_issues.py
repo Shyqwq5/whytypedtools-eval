@@ -60,6 +60,11 @@ def test_multiple_labels_are_and(mock_api):
 
 
 def test_sort_by_comments(mock_api):
+    # KNOWN WEAK: only checks that the returned page is non-increasing. In a real
+    # recording GitHub ranked three 1-comment issues above a 2-comment one, so the
+    # "top N by comments" is not trustworthy (README "Findings"). Strengthen to a
+    # true top-N check after the re-recording experiment; if the order is still
+    # wrong, sort=comments will be removed from the tool schema instead.
     issues = run(mock_api, "list_most_commented")["result"]["issues"]
     counts = [i["comments"] for i in issues]
     assert counts == sorted(counts, reverse=True)

@@ -53,6 +53,8 @@ against generic bash tools (with rule-based and LLM guardrails).
 - Issue numbers differ per sandbox. Eval ground truth references seed issues by
   their stable `key` from the YAML; the runtime maps key -> number via
   `sandbox/state.json` (written by seed/reset, gitignored, per-person).
+- Never use comment-count ordering (`sort=comments`) in eval gold answers: GitHub
+  returned it inconsistently with the actual comment counts (README "Findings").
 - Reset finds seed issues by number (from state.json), not by title, because the
   agent may rename issues during an eval. Title matching is only a fallback when
   state.json has no entry.

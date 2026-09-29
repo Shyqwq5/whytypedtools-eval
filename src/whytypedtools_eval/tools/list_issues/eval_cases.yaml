@@ -8,7 +8,8 @@
 #       tool: list_issues                    # tool the agent should pick
 #       args_subset: {}             # arguments that must match (others are free)
 #       result_keys: []             # seed issue keys expected in the answer;
-#                                   # resolved to numbers via sandbox/state.json
+#                                   # resolved to numbers via sandbox/state.json.
+#                                   # Never derive these from sort=comments ordering.
 #     runs: 3                       # repetitions (LLM output is non-deterministic)
 version: 1
 tool: list_issues
