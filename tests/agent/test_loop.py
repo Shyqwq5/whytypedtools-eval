@@ -103,6 +103,7 @@ def test_tool_call_then_answer(tmp_path):
     assert isinstance(event["latency_ms"], int)
     model_event = next(e for e in trace if e["event"] == "model_call")
     assert model_event["tool_plan"] == "I will use a tool."
+    assert "thinking" in model_event
     assert model_event["usage"]["input_tokens"] == 100
     assert trace[-1]["totals"] | {"latency_ms": 0} == {
         "model_calls": 2, "tool_calls": 1, "input_tokens": 300, "output_tokens": 30, "latency_ms": 0,

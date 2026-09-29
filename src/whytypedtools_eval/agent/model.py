@@ -5,7 +5,7 @@ both implement it. Messages are plain dicts in a neutral shape:
 
 - {"role": "system" | "user", "content": str}
 - {"role": "assistant", "content": str | None, "tool_plan": str | None,
-   "tool_calls": list[ToolCall]}
+   "thinking": str | None, "tool_calls": list[ToolCall]}
 - {"role": "tool", "tool_call_id": str, "content": str}   # JSON-encoded result
 """
 
@@ -52,6 +52,8 @@ class ModelTurn:
     finish_reason: str
     usage: Usage = field(default_factory=Usage)
     tool_plan: str | None = None
+    # Reasoning text, if the model returned it (Cohere "thinking" content).
+    thinking: str | None = None
     retries: list[Retry] = field(default_factory=list)
 
 

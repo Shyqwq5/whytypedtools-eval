@@ -25,6 +25,9 @@ from whytypedtools_eval.config import Settings
 DEFAULT_TEMPERATURE = 0.0
 # Cohere's `seed` is best effort: identical requests may still differ.
 DEFAULT_SEED = 0
+# Reasoning is on by default for models that support it; we send the setting
+# explicitly so a silent API default change cannot alter results.
+DEFAULT_THINKING = "enabled"
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 MAX_RETRIES = 4
 BACKOFF_BASE_S = 2.0
@@ -55,6 +58,9 @@ def to_cohere_messages(messages: list[Message]) -> list[dict[str, Any]]:
             if calls:
                 if m.get("tool_plan"):
                     msg["tool_plan"] = m["tool_plan"]
+                # Send the model's own reasoning back so later steps keep its context.
+                if m.get("thinking"):
+                    msg["content"] = [{"type": "thinking", "thinking": m["thinking"]}]
                 msg["tool_calls"] = [
                     {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
                     for c in calls
@@ -79,6 +85,7 @@ def to_cohere_messages(messages: list[Message]) -> list[dict[str, Any]]:
 def parse_response(resp: Any) -> ModelTurn:
     msg = resp.message
     texts = [item.text for item in (msg.content or []) if getattr(item, "type", None) == "text"]
+    thoughts = [item.thinking for item in (msg.content or []) if getattr(item, "type", None) == "thinking"]
     calls = [
         ToolCall(id=c.id, name=(c.function.name if c.function else "") or "",
                  arguments=(c.function.arguments if c.function else None) or "{}")
@@ -90,6 +97,7 @@ def parse_response(resp: Any) -> ModelTurn:
         finish_reason=str(resp.finish_reason).lower(),
         usage=_usage(resp.usage),
         tool_plan=msg.tool_plan,
+        thinking="\n".join(thoughts) if thoughts else None,
     )
 
 
@@ -125,6 +133,7 @@ class CohereModel:
         *,
         temperature: float = DEFAULT_TEMPERATURE,
         seed: int | None = DEFAULT_SEED,
+        thinking: str | None = DEFAULT_THINKING,
         max_retries: int = MAX_RETRIES,
         sleep: Callable[[float], None] = time.sleep,
         rng: random.Random | None = None,
@@ -133,6 +142,7 @@ class CohereModel:
         self.model = model
         self.temperature = temperature
         self.seed = seed
+        self.thinking = thinking
         self.max_retries = max_retries
         self._sleep = sleep
         self._rng = rng or random.Random()
@@ -149,6 +159,7 @@ class CohereModel:
             "model": self.model,
             "temperature": self.temperature,
             "seed": self.seed,
+            "thinking": self.thinking,
             "sdk_version": cohere.__version__,
         }
 
@@ -162,6 +173,8 @@ class CohereModel:
         }
         if self.seed is not None:
             request["seed"] = self.seed
+        if self.thinking is not None:
+            request["thinking"] = {"type": self.thinking}
         if not allow_tools:
             request["tool_choice"] = "NONE"
 

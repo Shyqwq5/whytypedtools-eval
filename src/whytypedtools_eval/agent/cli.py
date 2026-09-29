@@ -35,6 +35,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     p.add_argument("--seed", type=int, default=DEFAULT_SEED, help="Best-effort sampling seed.")
     p.add_argument("--no-seed", action="store_true", help="Do not send a seed.")
+    p.add_argument("--thinking", choices=["enabled", "disabled", "api-default"], default="enabled",
+                   help="Cohere reasoning setting. api-default sends nothing.")
     p.add_argument("--system-prompt", type=Path, default=DEFAULT_SYSTEM_PROMPT)
     p.add_argument("--trace-dir", type=Path, default=DEFAULT_TRACE_DIR)
     return p
@@ -42,7 +44,11 @@ def _parser() -> argparse.ArgumentParser:
 
 def _cohere_model(settings: Settings, args: argparse.Namespace) -> ChatModel:
     return CohereModel.from_settings(
-        settings, model=args.model, temperature=args.temperature, seed=None if args.no_seed else args.seed
+        settings,
+        model=args.model,
+        temperature=args.temperature,
+        seed=None if args.no_seed else args.seed,
+        thinking=None if args.thinking == "api-default" else args.thinking,
     )
 
 

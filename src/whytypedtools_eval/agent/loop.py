@@ -198,6 +198,7 @@ def run_agent(
                     finish_reason=turn.finish_reason,
                     text=turn.text,
                     tool_plan=turn.tool_plan,
+                    thinking=turn.thinking,
                     tool_calls=[{"id": c.id, "name": c.name, "arguments": c.arguments} for c in turn.tool_calls],
                     usage=turn.usage.to_dict(),
                 )
@@ -214,7 +215,7 @@ def run_agent(
 
                 messages.append(
                     {"role": "assistant", "content": turn.text, "tool_plan": turn.tool_plan,
-                     "tool_calls": turn.tool_calls}
+                     "thinking": turn.thinking, "tool_calls": turn.tool_calls}
                 )
                 # Execute in the order the model gave; the budget counts calls, not turns.
                 for call in turn.tool_calls:

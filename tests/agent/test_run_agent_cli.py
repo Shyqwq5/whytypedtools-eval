@@ -75,7 +75,7 @@ def test_default_factory_passes_cli_options(agent_settings, monkeypatch):
     monkeypatch.setattr("whytypedtools_eval.agent.cli.CohereModel.from_settings", fake_from_settings)
     with pytest.raises(SystemExit):
         main(["t", "--model", "command-x", "--temperature", "0.2", "--no-seed"], settings=agent_settings)
-    assert captured == {"model": "command-x", "temperature": 0.2, "seed": None}
+    assert captured == {"model": "command-x", "temperature": 0.2, "seed": None, "thinking": "enabled"}
 
 
 def test_negative_budget_rejected(agent_settings, capsys):

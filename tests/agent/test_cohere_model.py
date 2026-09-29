@@ -109,6 +109,7 @@ def test_request_settings():
     assert req["temperature"] == 0.0
     assert req["seed"] == 0
     assert req["request_options"] == {"max_retries": 0}
+    assert req["thinking"] == {"type": "enabled"}
     assert "tool_choice" not in req
     assert len(req["tools"]) == len(registry.TOOLS)
 
@@ -122,6 +123,34 @@ def test_tools_disabled_and_no_seed():
     assert len(req["tools"]) == len(registry.TOOLS)  # still declared for earlier tool messages
     assert "seed" not in req
     assert model.describe()["seed"] is None
+
+
+def test_thinking_can_be_left_to_api_default():
+    client = FakeClient(text_response())
+    model, _ = make(client, thinking=None)
+    model.step(MESSAGES, [])
+    assert "thinking" not in client.requests[0]
+    assert model.describe()["thinking"] is None
+
+
+def test_thinking_is_parsed_and_sent_back():
+    resp = cohere.V2ChatResponse(
+        id="r3",
+        finish_reason="TOOL_CALL",
+        message=cohere.AssistantMessageResponse(
+            content=[cohere.ThinkingAssistantMessageResponseContentItem(thinking="The user wants bugs.")],
+            tool_calls=[cohere.ToolCallV2(id="tc1", function=cohere.ToolCallV2Function(
+                name="list_issues", arguments="{}"))],
+        ),
+    )
+    model, _ = make(FakeClient(resp))
+    turn = model.step(MESSAGES, [])
+    assert turn.thinking == "The user wants bugs."
+    assert turn.text is None
+    (assistant,) = to_cohere_messages([{"role": "assistant", "content": None, "tool_plan": None,
+                                        "thinking": turn.thinking, "tool_calls": turn.tool_calls}])
+    assert assistant["content"] == [{"type": "thinking", "thinking": "The user wants bugs."}]
+    assert "tool_plan" not in assistant
 
 
 def test_parse_text_response():
@@ -207,6 +236,7 @@ def test_describe():
     model, _ = make(FakeClient(), temperature=0.0, seed=7)
     info = model.describe()
     assert info | {"sdk_version": None} == {
-        "provider": "cohere", "model": "command-test", "temperature": 0.0, "seed": 7, "sdk_version": None,
+        "provider": "cohere", "model": "command-test", "temperature": 0.0, "seed": 7,
+        "thinking": "enabled", "sdk_version": None,
     }
     assert info["sdk_version"] == cohere.__version__
