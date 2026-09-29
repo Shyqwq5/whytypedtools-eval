@@ -206,3 +206,15 @@ def test_tool_context_uses_fail_fast_client(settings):
         assert ctx.sandbox_repo == REPO
     finally:
         ctx.client.close()
+
+
+def test_counts_every_request_including_retries_and_pages(client, mock_api, sleeps):
+    mock_api.get(f"/repos/{REPO}/issues").mock(side_effect=[
+        httpx.Response(429, headers={"Retry-After": "1"}, json={"message": "slow down"}),
+        httpx.Response(200, json=[{"n": 1}],
+                       headers={"Link": f'<{API}/repos/{REPO}/issues?page=2>; rel="next"'}),
+        httpx.Response(200, json=[{"n": 2}]),
+    ])
+    assert client.requests_made == 0
+    assert len(list(client.paginate(f"repos/{REPO}/issues"))) == 2
+    assert client.requests_made == 3

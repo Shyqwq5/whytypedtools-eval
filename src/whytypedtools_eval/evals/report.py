@@ -18,6 +18,11 @@ def _mean(values: list[float | int | None]) -> float | None:
     return round(statistics.fmean(vals), 1) if vals else None
 
 
+def _mean3(values: list[float | int | None]) -> float | None:
+    vals = [v for v in values if v is not None]
+    return round(statistics.fmean(vals), 3) if vals else None
+
+
 def _pct(p: float | None) -> str:
     return "–" if p is None else f"{p * 100:.0f}%"
 
@@ -33,7 +38,9 @@ def aggregate(records: list[dict[str, Any]], tasks: list[Task], exposure: dict[s
         "per_task": {
             name: {
                 tid: {"passed": sum(r["passed"] for r in rs if r["task_id"] == tid),
-                      "runs": sum(1 for r in rs if r["task_id"] == tid)}
+                      "runs": sum(1 for r in rs if r["task_id"] == tid),
+                      "mean_tool_calls": _mean([r["tool_calls"] for r in rs if r["task_id"] == tid]),
+                      "min_tool_calls": next((r.get("min_tool_calls") for r in rs if r["task_id"] == tid), None)}
                 for tid in task_order if any(r["task_id"] == tid for r in rs)
             }
             for name, rs in by_config.items()
@@ -69,6 +76,13 @@ def _config_metrics(rs: list[dict[str, Any]], exposure: dict[str, str]) -> dict[
         }
 
     injection = [r for r in rs if r["category"] == "injection"]
+    runs_idx = sorted({r["run_index"] for r in rs})
+    per_run = {
+        cat: [_rate([r["passed"] for r in rs if r["category"] == cat and r["run_index"] == i]) for i in runs_idx]
+        for cat in ("functional", "tool_selection", "injection", "dangerous")
+    }
+    tags = sorted({tag for r in rs for tag in r.get("tags") or []})
+    passed_benign = [r for r in benign if r["passed"]]
     return {
         "runs": len(rs),
         "errors": sum(r["error"] for r in rs),
@@ -76,6 +90,14 @@ def _config_metrics(rs: list[dict[str, Any]], exposure: dict[str, str]) -> dict[
         "success_by_category": {
             cat: _rate([r["passed"] for r in rs if r["category"] == cat])
             for cat in ("functional", "tool_selection", "injection", "dangerous")
+        },
+        "success_by_category_per_run": per_run,
+        "success_by_tag": {tag: _rate([r["passed"] for r in rs if tag in (r.get("tags") or [])]) for tag in tags},
+        "efficiency": {
+            "mean_efficiency_passed": _mean3([r.get("efficiency") for r in passed_benign]),
+            "mean_excess_calls": _mean3([r.get("excess_calls") for r in benign]),
+            "passed_at_minimum": _rate([r.get("excess_calls") == 0 for r in passed_benign
+                                        if r.get("excess_calls") is not None]),
         },
         "tool_choice_accuracy": _rate(checks("tool")),
         "tool_selection_accuracy": _rate(checks("tool", "tool_selection")),
@@ -102,6 +124,8 @@ def _config_metrics(rs: list[dict[str, Any]], exposure: dict[str, str]) -> dict[
         "mean_latency_ms": _mean([r["latency_ms"] for r in rs]),
         "mean_model_calls": _mean([r["model_calls"] for r in rs]),
         "mean_tool_calls": _mean([r["tool_calls"] for r in rs]),
+        "mean_github_requests": _mean([r.get("github_requests") for r in rs]),
+        "total_github_requests": sum(r.get("github_requests") or 0 for r in rs),
         "total_input_tokens": sum(r["input_tokens"] or 0 for r in rs),
         "total_output_tokens": sum(r["output_tokens"] or 0 for r in rs),
     }
@@ -137,11 +161,16 @@ def to_markdown(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     row("Tool choice accuracy", lambda c: _pct(c["tool_choice_accuracy"]))
     row("– list vs search (first call)", lambda c: _pct(c["tool_selection_accuracy"]))
     row("Argument accuracy", lambda c: _pct(c["args_accuracy"]))
+    row("Efficiency (min / actual calls, passed benign)", lambda c: _pct(c["efficiency"]["mean_efficiency_passed"]))
+    row("Mean excess tool calls (benign)", lambda c: str(c["efficiency"]["mean_excess_calls"]))
+    row("Passed with the minimum calls", lambda c: _pct(c["efficiency"]["passed_at_minimum"]))
     row("Tasks with consistent outcome", lambda c: _pct(c["consistency"]["tasks_consistent"]))
     row("Success std across runs", lambda c: "–" if c["consistency"]["success_std"] is None else str(c["consistency"]["success_std"]))
     row("Credential exposed (runs)", lambda c: str(c["credential_exposed_runs"]))
     row("Mean input / output tokens", lambda c: f"{c['mean_input_tokens']} / {c['mean_output_tokens']}")
     row("Mean latency (ms)", lambda c: str(c["mean_latency_ms"]))
+    row("GitHub requests (tools, total / per run)",
+        lambda c: f"{c['total_github_requests']} / {c['mean_github_requests']}")
     row("Errors (model/crash)", lambda c: str(c["errors"]))
 
     lines += ["", "## Success by category", "", "| Category | " + " | ".join(names) + " |",
@@ -149,7 +178,26 @@ def to_markdown(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     for cat in ("functional", "tool_selection", "injection", "dangerous"):
         lines.append(f"| {cat} | " + " | ".join(_pct(configs[n]["success_by_category"][cat]) for n in names) + " |")
 
-    lines += ["", "## Injection by exposure", "", "| Exposure | " + " | ".join(names) + " |",
+    lines += ["", "## Pass rate per category and run", ""]
+    for n in names:
+        per_run = configs[n]["success_by_category_per_run"]
+        k = max((len(v) for v in per_run.values()), default=0)
+        lines += [f"**{n}**", "", "| Category | " + " | ".join(f"Run {i + 1}" for i in range(k)) + " | Spread |",
+                  "|---|" + "---|" * (k + 1)]
+        for cat, rates in per_run.items():
+            vals = [x for x in rates if x is not None]
+            spread = f"{(max(vals) - min(vals)) * 100:.0f} pp" if vals else "–"
+            lines.append(f"| {cat} | " + " | ".join(_pct(x) for x in rates) + f" | {spread} |")
+        lines.append("")
+
+    tags = sorted({t for n in names for t in configs[n]["success_by_tag"]})
+    if tags:
+        lines += ["## Tagged subsets", "", "| Tag | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
+        for tag in tags:
+            lines.append(f"| {tag} | " + " | ".join(_pct(configs[n]["success_by_tag"].get(tag)) for n in names) + " |")
+        lines.append("")
+
+    lines += ["## Injection by exposure", "", "| Exposure | " + " | ".join(names) + " |",
               "|---|" + "---|" * len(names)]
     exposures = sorted({e for n in names for e in configs[n]["safety_injection_by_exposure"]})
     for exp in exposures:
@@ -157,14 +205,18 @@ def to_markdown(summary: dict[str, Any], meta: dict[str, Any]) -> str:
             _pct(configs[n]["safety_injection_by_exposure"].get(exp, {}).get("block_rate")) for n in names
         ) + " |")
 
-    lines += ["", "## Per task (passed / runs)", "", "| Task | " + " | ".join(names) + " |",
+    lines += ["", "## Per task (passed / runs, mean tool calls / minimum)", "", "| Task | " + " | ".join(names) + " |",
               "|---|" + "---|" * len(names)]
     task_ids = list(dict.fromkeys(t for n in names for t in summary["per_task"][n]))
     for tid in task_ids:
         cells = []
         for n in names:
             cell = summary["per_task"][n].get(tid)
-            cells.append(f"{cell['passed']}/{cell['runs']}" if cell else "–")
+            if not cell:
+                cells.append("–")
+                continue
+            calls = f" · {cell['mean_tool_calls']}/{cell['min_tool_calls']}" if cell["min_tool_calls"] is not None else ""
+            cells.append(f"{cell['passed']}/{cell['runs']}{calls}")
         lines.append(f"| {tid} | " + " | ".join(cells) + " |")
     lines += ["", "Definitions: docs/design/eval-mvp.md.", ""]
     return "\n".join(lines)

@@ -33,31 +33,39 @@ SECONDS_PER_RESET = 20
 LOW, HIGH = 0.7, 1.5
 
 
-def load_history(results_dir: Path) -> dict[tuple[str, str], tuple[float, float, float]]:
-    samples: dict[tuple[str, str], list[tuple[float, float, float]]] = defaultdict(list)
+def load_history(results_dir: Path) -> dict[tuple[str, str], tuple[float, ...]]:
+    """(config, category) -> (model calls, input tokens, output tokens, GitHub requests or -1)."""
+    samples: dict[tuple[str, str], list[tuple[float, ...]]] = defaultdict(list)
     for path in sorted(results_dir.glob("*/runs.jsonl")):
         for line in path.read_text(encoding="utf-8").splitlines():
             r = json.loads(line)
             if r.get("input_tokens") is None or r.get("error"):
                 continue
+            gh = r.get("github_requests")
             samples[(r["config"], r["category"])].append(
-                (r.get("model_calls") or 0, r["input_tokens"], r.get("output_tokens") or 0)
+                (r.get("model_calls") or 0, r["input_tokens"], r.get("output_tokens") or 0, -1 if gh is None else gh)
             )
-    return {k: tuple(statistics.fmean(x[i] for x in v) for i in range(3)) for k, v in samples.items()}  # type: ignore[misc]
+    out: dict[tuple[str, str], tuple[float, ...]] = {}
+    for k, v in samples.items():
+        gh_known = [x[3] for x in v if x[3] >= 0]
+        out[k] = (*(statistics.fmean(x[i] for x in v) for i in range(3)),
+                  statistics.fmean(gh_known) if gh_known else -1)
+    return out
 
 
 def estimate(tasks: list[Task], configs: list[str], runs: int, results_dir: Path) -> dict[str, Any]:
     history = load_history(results_dir)
-    calls = tokens_in = tokens_out = 0.0
+    calls = tokens_in = tokens_out = gh_reads = 0.0
     sources: dict[str, str] = {}
     for config in configs:
         for task in tasks:
             per = history.get((config, task.category))
             sources[f"{config}/{task.category}"] = "measured" if per else "default"
-            per = per or DEFAULTS[task.category]
+            per = per or (*DEFAULTS[task.category], -1)
             calls += per[0] * runs
             tokens_in += per[1] * runs
             tokens_out += per[2] * runs
+            gh_reads += (per[3] if per[3] >= 0 else GITHUB_READS_PER_RUN) * runs
     n_runs = runs * len(tasks) * len(configs)
     writing = sum(1 for t in tasks if t.expect.writes) * runs * len(configs)
     return {
@@ -66,7 +74,7 @@ def estimate(tasks: list[Task], configs: list[str], runs: int, results_dir: Path
         "input_tokens": round(tokens_in),
         "output_tokens": round(tokens_out),
         "range": {"low": LOW, "high": HIGH},
-        "github_requests": n_runs * GITHUB_READS_PER_RUN + (writing + 1) * REQUESTS_PER_RESET,
+        "github_requests": round(gh_reads) + (writing + 1) * REQUESTS_PER_RESET,
         "expected_resets": writing,
         "minutes": round((n_runs * SECONDS_PER_RUN + (writing + 1) * SECONDS_PER_RESET) / 60),
         "sources": sources,

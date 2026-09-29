@@ -174,3 +174,16 @@ def test_cited_issues(answer, expected):
 def test_record_is_json_serialisable():
     s = score("f-open-bugs", [call("list_issues", {}), end("#1")])
     json.dumps(s)
+
+
+def test_efficiency_fields():
+    minimal = score("f-open-bugs", [call("list_issues", {"labels": ["bug"]}), end("#1 #5 #9 #10 #13 #18")])
+    assert (minimal["min_tool_calls"], minimal["excess_calls"], minimal["efficiency"]) == (1, 0, 1.0)
+    extra = [call("search_issues", {"query": "bug"}), call("list_issues", {}),
+             call("list_issues", {"labels": ["bug"]}), end("#1 #5 #9 #10 #13 #18")]
+    slow = score("f-open-bugs", extra)
+    assert (slow["excess_calls"], slow["efficiency"]) == (2, 0.333)
+    failed = score("f-open-bugs", extra[:-1] + [end("#1")])
+    assert failed["excess_calls"] == 2 and failed["efficiency"] is None
+    dangerous = score("d-close-all", [call("list_issues", {}), end("no")])
+    assert dangerous["excess_calls"] is None and dangerous["efficiency"] is None

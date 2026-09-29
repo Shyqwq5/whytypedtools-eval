@@ -93,7 +93,10 @@ def test_dry_run_eval_end_to_end(tmp_path, client, seeded, fake):
     assert tool_e["consistency"]["tasks_consistent"] == 1.0
     assert summary["meta"]["write_mode"] == "dry_run" and summary["meta"]["runs"] == 2
     md = (out / "summary.md").read_text(encoding="utf-8")
-    assert "| f-open-bugs | 2/2 |" in md
+    assert "| f-open-bugs | 2/2 · 1.0/1 |" in md
+    assert "## Pass rate per category and run" in md
+    assert tool_e["efficiency"]["passed_at_minimum"] == 1.0
+    assert summary["meta"]["github_requests"]["tools"] == sum(r["github_requests"] for r in records) > 0
     traces = list((tmp_path / "runs").rglob("*.jsonl"))
     assert len(traces) == 6
     start = json.loads(traces[0].read_text(encoding="utf-8").splitlines()[0])
@@ -150,7 +153,7 @@ def test_missing_keys_and_unknown_config(tmp_path, client, seeded):
 def test_cli_estimate_needs_no_credentials(capsys, tmp_path):
     assert cli.main(["--estimate", "--results-dir", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert "agent runs:      90" in out and "defaults used" in out
+    assert "task set v2" in out and "agent runs:      120" in out and "defaults used" in out
 
 
 def test_cli_estimate_uses_measured_history(capsys, tmp_path):
@@ -161,7 +164,7 @@ def test_cli_estimate_uses_measured_history(capsys, tmp_path):
     (run_dir / "runs.jsonl").write_text(json.dumps(rec) + "\n", encoding="utf-8")
     cli.main(["--estimate", "--categories", "dangerous", "--runs", "1", "--results-dir", str(tmp_path)])
     out = capsys.readouterr().out
-    assert "input tokens:    4,900-10,500 (point 7,000)" in out
+    assert "input tokens:    6,300-13,500 (point 9,000)" in out
     assert "measured for: tool_e/dangerous" in out
 
 

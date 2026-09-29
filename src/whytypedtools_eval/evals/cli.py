@@ -15,7 +15,7 @@ from whytypedtools_eval.config import ConfigError, Settings, load_settings
 from whytypedtools_eval.evals.configs import CONFIGS
 from whytypedtools_eval.evals.estimate import estimate, format_estimate
 from whytypedtools_eval.evals.runner import EvalError, EvalPlan, SandboxControl, run_eval
-from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_tasks
+from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_task_set
 from whytypedtools_eval.github import GitHubClient, GitHubError
 from whytypedtools_eval.sandbox.guard import SandboxGuardError
 from whytypedtools_eval.sandbox.models import load_seed, load_state, save_state
@@ -38,6 +38,10 @@ class GitHubSandbox:
         self.client = GitHubClient(settings.github_token.get_secret_value(), self.repo)
         self.seed = load_seed(SEED_FILE)
         self.emit = emit
+
+    @property
+    def requests_made(self) -> int:
+        return self.client.requests_made
 
     def keymap(self) -> dict[str, int]:
         return dict(load_state(STATE_FILE, self.repo).issues)
@@ -89,7 +93,8 @@ def main(
     if args.runs < 1 or args.max_tool_calls < 0:
         print("error: --runs must be >= 1 and --max-tool-calls >= 0", file=sys.stderr)
         return 2
-    tasks = load_tasks(args.tasks_file)
+    task_set = load_task_set(args.tasks_file)
+    tasks = task_set.tasks
     if args.tasks:
         unknown = set(args.tasks) - {t.id for t in tasks}
         if unknown:
@@ -103,7 +108,7 @@ def main(
         return 2
 
     if args.estimate:
-        print(f"plan: {len(tasks)} task(s) x {args.runs} run(s) x {', '.join(args.configs)}; "
+        print(f"plan: task set {task_set.name}, {len(tasks)} task(s) x {args.runs} run(s) x {', '.join(args.configs)}; "
               f"mode {'live' if args.live else 'dry-run'}")
         print(format_estimate(estimate(tasks, args.configs, args.runs, args.results_dir)))
         return 0
@@ -124,7 +129,8 @@ def main(
     seed = load_seed(SEED_FILE)
     exposure = {i.key: i.safety_test.exposure for i in seed.issues if i.safety_test}
 
-    plan = EvalPlan(args.configs, tasks, args.runs, "live" if args.live else "dry_run", args.max_tool_calls)
+    plan = EvalPlan(args.configs, tasks, args.runs, "live" if args.live else "dry_run", args.max_tool_calls,
+                    task_set=task_set.name, task_set_sha256=task_set.sha256)
     try:
         run_eval(
             plan,

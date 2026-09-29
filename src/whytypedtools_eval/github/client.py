@@ -82,6 +82,8 @@ class GitHubClient:
         self._sleep = sleep
         self._clock = clock
         self._last_write: float | None = None
+        # Every HTTP request sent, including retries and pagination (for eval accounting).
+        self.requests_made = 0
         self._http = httpx.Client(
             base_url=self._base_url,
             headers={
@@ -144,6 +146,7 @@ class GitHubClient:
                 self._last_write = self._pace(self._last_write, self._write_interval)
             if is_search:
                 self._last_search = self._pace(self._last_search, self._search_interval)
+            self.requests_made += 1
             resp = self._http.request(method, path, **kwargs)
 
             wait = self._rate_limit_wait(resp)

@@ -50,6 +50,11 @@ class SandboxControl(Protocol):
         ...
 
 
+def _sandbox_requests(sandbox: SandboxControl) -> int:
+    """GitHub requests made by the sandbox control so far (0 if it doesn't count)."""
+    return getattr(sandbox, "requests_made", 0)
+
+
 @dataclass(frozen=True)
 class EvalPlan:
     configs: list[str]
@@ -57,6 +62,8 @@ class EvalPlan:
     runs: int
     write_mode: WriteMode
     max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS
+    task_set: str = ""
+    task_set_sha256: str = ""
 
 
 class _Sanitiser:
@@ -94,6 +101,7 @@ def run_eval(
     system_prompt = system_prompt or SystemPrompt.load()
     clean = _Sanitiser(secrets or [], repo)
 
+    before = _sandbox_requests(sandbox)
     if plan.write_mode == "live":
         emit("resetting the sandbox to the seed state before the eval")
         sandbox.reset()
@@ -104,6 +112,7 @@ def run_eval(
                 f"sandbox is not in the seed state ({len(pending)} pending change(s)); "
                 "run scripts/reset_sandbox.py first"
             )
+    initial_sandbox_requests = _sandbox_requests(sandbox) - before
     keymap = sandbox.keymap()
     missing = sorted({k for t in plan.tasks for k in t.referenced_keys()} - set(keymap))
     if missing:
@@ -123,6 +132,7 @@ def run_eval(
                 for config in plan.configs:
                     prompt = prompt_for(task, keymap)
                     setup = CONFIGS[config](tool_client, repo, plan.write_mode, prompt)
+                    requests_before = tool_client.requests_made
                     result = run_agent(
                         prompt,
                         model=model,
@@ -151,15 +161,19 @@ def run_eval(
                         typed=setup.typed,
                     )
                     record.update(config=config, run_index=run_index, run_id=result.run_id,
-                                  trace=result.trace_path.name, drift=None)
+                                  trace=result.trace_path.name, drift=None,
+                                  github_requests=tool_client.requests_made - requests_before,
+                                  sandbox_requests=0)
 
                     if plan.write_mode == "live" and any(w["executed"] for w in setup.ctx.write_log):
+                        sb_before = _sandbox_requests(sandbox)
                         drift = sandbox.drift()
                         record["drift"] = len(drift)
                         if drift:
                             emit(f"  sandbox drifted ({len(drift)} change(s)); resetting")
                             sandbox.reset()
                             keymap = sandbox.keymap()
+                        record["sandbox_requests"] = _sandbox_requests(sandbox) - sb_before
 
                     records.append(record)
                     runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
@@ -178,11 +192,18 @@ def run_eval(
         "configs": plan.configs,
         "runs": plan.runs,
         "tasks": len(plan.tasks),
+        "task_set": plan.task_set,
+        "task_set_sha256": plan.task_set_sha256,
         "task_ids": [t.id for t in plan.tasks],
         "tasks_sha256": sha256_json([t.model_dump() for t in plan.tasks]),
         "write_mode": plan.write_mode,
         "max_tool_calls": plan.max_tool_calls,
         "system_prompt_sha256": sha256_text(system_prompt.text),
+        "github_requests": {
+            "tools": sum(r["github_requests"] for r in records),
+            "sandbox_after_runs": sum(r["sandbox_requests"] for r in records),
+            "sandbox_initial": initial_sandbox_requests,
+        },
     }
     summary = aggregate(records, plan.tasks, exposure or {})
     (out / "summary.json").write_text(
