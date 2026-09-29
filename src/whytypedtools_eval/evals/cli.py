@@ -1,0 +1,144 @@
+"""Command-line entry point for scripts/run_eval.py."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from collections.abc import Callable, Sequence
+from pathlib import Path
+
+from whytypedtools_eval.agent.cohere_model import CohereModel
+from whytypedtools_eval.agent.loop import DEFAULT_MAX_TOOL_CALLS, DEFAULT_TRACE_DIR, PROJECT_ROOT
+from whytypedtools_eval.agent.model import ChatModel
+from whytypedtools_eval.agent.trace import git_info
+from whytypedtools_eval.config import ConfigError, Settings, load_settings
+from whytypedtools_eval.evals.configs import CONFIGS
+from whytypedtools_eval.evals.estimate import estimate, format_estimate
+from whytypedtools_eval.evals.runner import EvalError, EvalPlan, SandboxControl, run_eval
+from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_tasks
+from whytypedtools_eval.github import GitHubClient, GitHubError
+from whytypedtools_eval.sandbox.guard import SandboxGuardError
+from whytypedtools_eval.sandbox.models import load_seed, load_state, save_state
+from whytypedtools_eval.sandbox.ops import Sandbox
+from whytypedtools_eval.sandbox.reset import reset
+from whytypedtools_eval.sandbox.search_sync import SearchIndexTimeout, wait_for_search_index
+from whytypedtools_eval.tools.base import TOOL_FAIL_FAST_AFTER_S, TOOL_MAX_RETRIES
+
+SEED_FILE = PROJECT_ROOT / "sandbox" / "seed_data.yaml"
+STATE_FILE = PROJECT_ROOT / "sandbox" / "state.json"
+RESULTS_DIR = PROJECT_ROOT / "results"
+
+
+class GitHubSandbox:
+    """SandboxControl over the real sandbox, using the seed/reset code."""
+
+    def __init__(self, settings: Settings, *, emit: Callable[[str], None] = print) -> None:
+        self.repo = settings.sandbox_repo
+        # Patient client, like the reset script.
+        self.client = GitHubClient(settings.github_token.get_secret_value(), self.repo)
+        self.seed = load_seed(SEED_FILE)
+        self.emit = emit
+
+    def keymap(self) -> dict[str, int]:
+        return dict(load_state(STATE_FILE, self.repo).issues)
+
+    def drift(self) -> list[str]:
+        sb = Sandbox(self.client, self.repo, dry_run=True, emit=lambda _: None)
+        reset(sb, self.seed, load_state(STATE_FILE, self.repo))
+        return sb.writes
+
+    def reset(self) -> list[str]:
+        sb = Sandbox(self.client, self.repo, dry_run=False, emit=self.emit)
+        state = reset(sb, self.seed, load_state(STATE_FILE, self.repo))
+        save_state(STATE_FILE, state)
+        wait_for_search_index(self.client, self.repo, emit=self.emit)
+        return sb.writes
+
+
+def _parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Run the eval tasks against the sandbox and write results/.")
+    p.add_argument("--configs", nargs="+", default=["tool_e"], choices=sorted(CONFIGS))
+    p.add_argument("--runs", type=int, default=3, help="Repetitions per task (default 3).")
+    p.add_argument("--tasks", nargs="+", metavar="ID", help="Only these task ids.")
+    p.add_argument("--categories", nargs="+", choices=["functional", "tool_selection", "dangerous", "injection"])
+    p.add_argument("--live", action="store_true",
+                   help="Let write tools change the sandbox. Resets the sandbox first and after any run that wrote.")
+    p.add_argument("--estimate", action="store_true", help="Only print the expected cost; call no API.")
+    p.add_argument("--max-tool-calls", type=int, default=DEFAULT_MAX_TOOL_CALLS)
+    p.add_argument("--tasks-file", type=Path, default=DEFAULT_TASKS)
+    p.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
+    p.add_argument("--trace-dir", type=Path, default=DEFAULT_TRACE_DIR)
+    return p
+
+
+def _cohere(settings: Settings) -> ChatModel:
+    return CohereModel.from_settings(settings)
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    settings: Settings | None = None,
+    model_factory: Callable[[Settings], ChatModel] = _cohere,
+    sandbox_factory: Callable[[Settings], SandboxControl] = GitHubSandbox,
+    client_factory: Callable[[Settings], GitHubClient] | None = None,
+) -> int:
+    args = _parser().parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
+    if args.runs < 1 or args.max_tool_calls < 0:
+        print("error: --runs must be >= 1 and --max-tool-calls >= 0", file=sys.stderr)
+        return 2
+    tasks = load_tasks(args.tasks_file)
+    if args.tasks:
+        unknown = set(args.tasks) - {t.id for t in tasks}
+        if unknown:
+            print(f"error: unknown task id(s): {', '.join(sorted(unknown))}", file=sys.stderr)
+            return 2
+        tasks = [t for t in tasks if t.id in args.tasks]
+    if args.categories:
+        tasks = [t for t in tasks if t.category in args.categories]
+    if not tasks:
+        print("error: no tasks selected", file=sys.stderr)
+        return 2
+
+    if args.estimate:
+        print(f"plan: {len(tasks)} task(s) x {args.runs} run(s) x {', '.join(args.configs)}; "
+              f"mode {'live' if args.live else 'dry-run'}")
+        print(format_estimate(estimate(tasks, args.configs, args.runs, args.results_dir)))
+        return 0
+
+    try:
+        settings = settings or load_settings(PROJECT_ROOT / ".env")
+        model = model_factory(settings)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    client = (client_factory or (lambda s: GitHubClient(
+        s.github_token.get_secret_value(), s.sandbox_repo,
+        fail_fast_after=TOOL_FAIL_FAST_AFTER_S, max_retries=TOOL_MAX_RETRIES,
+    )))(settings)
+    secrets = [settings.github_token.get_secret_value()]
+    if settings.cohere_api_key is not None:
+        secrets.append(settings.cohere_api_key.get_secret_value())
+    seed = load_seed(SEED_FILE)
+    exposure = {i.key: i.safety_test.exposure for i in seed.issues if i.safety_test}
+
+    plan = EvalPlan(args.configs, tasks, args.runs, "live" if args.live else "dry_run", args.max_tool_calls)
+    try:
+        run_eval(
+            plan,
+            model=model,
+            tool_client=client,
+            repo=settings.sandbox_repo,
+            sandbox=sandbox_factory(settings),
+            results_dir=args.results_dir,
+            trace_dir=args.trace_dir,
+            secrets=secrets,
+            metadata=git_info(PROJECT_ROOT),
+            exposure=exposure,
+        )
+    except (EvalError, SearchIndexTimeout, GitHubError, SandboxGuardError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
