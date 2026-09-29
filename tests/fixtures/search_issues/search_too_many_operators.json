@@ -8,7 +8,7 @@
   "auth": "valid",
   "repo_suffix": "",
   "expect": "validation_failed",
-  "source": "fake",
+  "source": "recorded",
   "exchanges": [
     {
       "request": {
@@ -22,14 +22,20 @@
       "response": {
         "status": 422,
         "headers": {
-          "content-type": "application/json"
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "30",
+          "x-ratelimit-remaining": "18",
+          "x-ratelimit-reset": "1790716376",
+          "x-ratelimit-used": "12",
+          "x-ratelimit-resource": "search"
         },
         "json": {
           "message": "Validation Failed",
           "errors": [
             {
               "message": "More than five AND / OR / NOT operators were used.",
-              "code": "invalid"
+              "code": "invalid",
+              "field": "q"
             }
           ]
         }

@@ -8,7 +8,7 @@
   "auth": "valid",
   "repo_suffix": "",
   "expect": "ok",
-  "source": "fake",
+  "source": "recorded",
   "exchanges": [
     {
       "request": {
@@ -22,86 +22,94 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "application/json"
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "30",
+          "x-ratelimit-remaining": "26",
+          "x-ratelimit-reset": "1790716376",
+          "x-ratelimit-used": "4",
+          "x-ratelimit-resource": "search"
         },
         "json": {
           "total_count": 3,
           "incomplete_results": false,
           "items": [
             {
-              "number": 1,
-              "title": "API returns 429 when rate limit is exceeded",
-              "body": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.\n",
-              "state": "open",
-              "state_reason": null,
-              "labels": [
-                {
-                  "name": "bug",
-                  "color": null,
-                  "description": null
-                },
-                {
-                  "name": "api",
-                  "color": null,
-                  "description": null
-                }
-              ],
-              "locked": false,
-              "created_at": "2026-01-01T00:01:00Z",
-              "updated_at": "2026-01-01T00:03:00Z",
-              "comments": 2,
               "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
-              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/1"
-            },
-            {
-              "number": 2,
-              "title": "Document rate limit headers",
-              "body": "The docs should explain `X-RateLimit-Limit`, `X-RateLimit-Remaining` and\n`X-RateLimit-Reset`, with an example of backing off.\n",
-              "state": "closed",
-              "state_reason": "completed",
-              "labels": [
-                {
-                  "name": "documentation",
-                  "color": null,
-                  "description": null
-                },
-                {
-                  "name": "api",
-                  "color": null,
-                  "description": null
-                }
-              ],
-              "locked": false,
-              "created_at": "2026-01-01T00:04:00Z",
-              "updated_at": "2026-01-01T00:04:00Z",
-              "comments": 0,
-              "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
-              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/2"
-            },
-            {
+              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/3",
               "number": 3,
               "title": "Make the per-tenant rate limit configurable",
-              "body": "Large tenants hit the default limit during bulk imports. Allow admins to\nraise the rate limit per tenant from the settings page.\n",
-              "state": "open",
-              "state_reason": null,
               "labels": [
                 {
                   "name": "enhancement",
-                  "color": null,
-                  "description": null
+                  "color": "a2eeef",
+                  "description": "New feature or request"
                 },
                 {
                   "name": "api",
-                  "color": null,
-                  "description": null
+                  "color": "5319e7",
+                  "description": "Public HTTP API"
                 }
               ],
+              "state": "open",
               "locked": false,
-              "created_at": "2026-01-01T00:05:00Z",
-              "updated_at": "2026-01-01T00:05:00Z",
               "comments": 0,
+              "created_at": "2026-09-29T20:55:51Z",
+              "updated_at": "2026-09-29T20:55:51Z",
+              "closed_at": null,
+              "body": "Large tenants hit the default limit during bulk imports. Allow admins to\nraise the rate limit per tenant from the settings page.\n",
+              "state_reason": null
+            },
+            {
               "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
-              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/3"
+              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/1",
+              "number": 1,
+              "title": "API returns 429 when rate limit is exceeded",
+              "labels": [
+                {
+                  "name": "bug",
+                  "color": "d73a4a",
+                  "description": "Something isn't working"
+                },
+                {
+                  "name": "api",
+                  "color": "5319e7",
+                  "description": "Public HTTP API"
+                }
+              ],
+              "state": "open",
+              "locked": false,
+              "comments": 2,
+              "created_at": "2026-09-29T20:55:46Z",
+              "updated_at": "2026-09-29T20:55:48Z",
+              "closed_at": null,
+              "body": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.\n",
+              "state_reason": null
+            },
+            {
+              "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/2",
+              "number": 2,
+              "title": "Document rate limit headers",
+              "labels": [
+                {
+                  "name": "documentation",
+                  "color": "0075ca",
+                  "description": "Improvements or additions to documentation"
+                },
+                {
+                  "name": "api",
+                  "color": "5319e7",
+                  "description": "Public HTTP API"
+                }
+              ],
+              "state": "closed",
+              "locked": false,
+              "comments": 0,
+              "created_at": "2026-09-29T20:55:49Z",
+              "updated_at": "2026-09-29T20:55:50Z",
+              "closed_at": "2026-09-29T20:55:50Z",
+              "body": "The docs should explain `X-RateLimit-Limit`, `X-RateLimit-Remaining` and\n`X-RateLimit-Reset`, with an example of backing off.\n",
+              "state_reason": "completed"
             }
           ]
         }
@@ -115,6 +123,20 @@
       "total_count": 3,
       "issues": [
         {
+          "number": 3,
+          "title": "Make the per-tenant rate limit configurable",
+          "state": "open",
+          "labels": [
+            "enhancement",
+            "api"
+          ],
+          "comments": 0,
+          "created_at": "2026-09-29",
+          "updated_at": "2026-09-29",
+          "body_excerpt": "Large tenants hit the default limit during bulk imports. Allow admins to\nraise the rate limit per tenant from the settings page.",
+          "body_truncated": false
+        },
+        {
           "number": 1,
           "title": "API returns 429 when rate limit is exceeded",
           "state": "open",
@@ -123,8 +145,8 @@
             "api"
           ],
           "comments": 2,
-          "created_at": "2026-01-01",
-          "updated_at": "2026-01-01",
+          "created_at": "2026-09-29",
+          "updated_at": "2026-09-29",
           "body_excerpt": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.",
           "body_truncated": false
         },
@@ -138,23 +160,9 @@
             "api"
           ],
           "comments": 0,
-          "created_at": "2026-01-01",
-          "updated_at": "2026-01-01",
+          "created_at": "2026-09-29",
+          "updated_at": "2026-09-29",
           "body_excerpt": "The docs should explain `X-RateLimit-Limit`, `X-RateLimit-Remaining` and\n`X-RateLimit-Reset`, with an example of backing off.",
-          "body_truncated": false
-        },
-        {
-          "number": 3,
-          "title": "Make the per-tenant rate limit configurable",
-          "state": "open",
-          "labels": [
-            "enhancement",
-            "api"
-          ],
-          "comments": 0,
-          "created_at": "2026-01-01",
-          "updated_at": "2026-01-01",
-          "body_excerpt": "Large tenants hit the default limit during bulk imports. Allow admins to\nraise the rate limit per tenant from the settings page.",
           "body_truncated": false
         }
       ],

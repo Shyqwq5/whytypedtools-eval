@@ -8,7 +8,7 @@
   "auth": "invalid",
   "repo_suffix": "",
   "expect": "auth_failed",
-  "source": "fake",
+  "source": "recorded",
   "exchanges": [
     {
       "request": {
@@ -22,7 +22,7 @@
       "response": {
         "status": 401,
         "headers": {
-          "content-type": "application/json"
+          "content-type": "application/json; charset=utf-8"
         },
         "json": {
           "message": "Bad credentials"

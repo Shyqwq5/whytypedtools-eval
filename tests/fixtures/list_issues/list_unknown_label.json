@@ -10,7 +10,7 @@
   "auth": "valid",
   "repo_suffix": "",
   "expect": "ok",
-  "source": "fake",
+  "source": "recorded",
   "exchanges": [
     {
       "request": {
@@ -27,7 +27,12 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "application/json"
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4849",
+          "x-ratelimit-reset": "1790718889",
+          "x-ratelimit-used": "151",
+          "x-ratelimit-resource": "core"
         },
         "json": []
       }
@@ -43,7 +48,12 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "application/json"
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4848",
+          "x-ratelimit-reset": "1790718889",
+          "x-ratelimit-used": "152",
+          "x-ratelimit-resource": "core"
         },
         "json": [
           {
