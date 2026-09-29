@@ -180,11 +180,17 @@ class RecordingTransport(httpx.BaseTransport):
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         response = self.inner.handle_request(request)
+        # read() returns the *decoded* body (e.g. gunzipped). The response handed
+        # back must therefore drop Content-Encoding/Content-Length, or the client
+        # would try to decode the plain body a second time.
         content = response.read()
-        self.exchanges.append(sanitize_exchange(request, httpx.Response(
-            response.status_code, headers=response.headers, content=content), self.real_repo))
-        return httpx.Response(response.status_code, headers=response.headers, content=content,
-                              request=request)
+        headers = [
+            (k, v) for k, v in response.headers.multi_items()
+            if k.lower() not in ("content-encoding", "content-length")
+        ]
+        decoded = httpx.Response(response.status_code, headers=headers, content=content, request=request)
+        self.exchanges.append(sanitize_exchange(request, decoded, self.real_repo))
+        return decoded
 
 
 def record_scenario(

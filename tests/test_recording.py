@@ -1,9 +1,18 @@
 """The fixture recorder must strip anything sensitive before a fixture hits disk."""
 
+import gzip
+import json
+
 import httpx
 import pytest
 
-from tests.recording import FIXTURE_REPO, UnsafeFixtureError, assert_safe, sanitize_exchange
+from tests.recording import (
+    FIXTURE_REPO,
+    RecordingTransport,
+    UnsafeFixtureError,
+    assert_safe,
+    sanitize_exchange,
+)
 
 REAL = "RealOwner/my-sandbox"
 
@@ -66,3 +75,24 @@ def test_assert_safe_catches_leftovers():
     with pytest.raises(UnsafeFixtureError, match="owner"):
         assert_safe({"x": "mentioned by realowner here"}, [], "RealOwner")
     assert_safe({"x": f"{FIXTURE_REPO} fine"}, ["TOPSECRET"], "realowner")
+
+
+def test_recording_transport_handles_compressed_responses():
+    # Regression: GitHub gzips most responses. The recorder used to hand the
+    # decoded body back with the original Content-Encoding header, so the client
+    # failed with DecodingError and nothing was recorded.
+    items = [{"number": 1, "title": "t", "state": "open", "labels": []}]
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            headers={"content-encoding": "gzip", "content-type": "application/json"},
+            content=gzip.compress(json.dumps(items).encode()),
+        )
+
+    rec = RecordingTransport(httpx.MockTransport(handler), REAL)
+    with httpx.Client(transport=rec, base_url="https://api.github.com") as client:
+        assert client.get(f"/repos/{REAL}/issues").json() == items
+    assert len(rec.exchanges) == 1
+    assert rec.exchanges[0]["response"]["json"] == items
+    assert "content-encoding" not in rec.exchanges[0]["response"]["headers"]
