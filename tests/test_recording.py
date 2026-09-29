@@ -159,3 +159,49 @@ def test_committed_fixtures_match_their_declared_outcome():
             continue
         assert fixture["expect"] == declared[fixture["scenario"]], fixture["scenario"]
         assert outcome(fixture["result"]) == fixture["expect"], fixture["scenario"]
+
+
+# -- URL-encoded identifiers ---------------------------------------------------
+
+
+def test_url_encoded_repo_in_link_header_is_replaced():
+    # Regression: search pagination Links carry the query percent-encoded
+    # (repo%3AOwner%2Fname), which plain-text replacement missed.
+    link = (f'<https://api.github.com/search/issues?q=repo%3A{REAL.replace("/", "%2F")}'
+            '+is%3Aissue+x&per_page=2&page=2>; rel="next"')
+    ex = _exchange({"total_count": 3, "items": []}, headers={"Link": link},
+                   url=f"https://api.github.com/search/issues?q=repo:{REAL}+is:issue+x")
+    text = json.dumps(ex)
+    assert "RealOwner" not in text and "realowner" not in text.lower()
+    assert "repo%3Asandbox-owner%2Fwhytypedtools-sandbox" in ex["response"]["headers"]["link"]
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "q=repo%3ARealOwner%2Fmy-sandbox",      # single encoding
+        "q=repo%253ARealOwner%252Fmy-sandbox",  # double encoding
+        "q=repo:RealOwner+is:issue",            # form encoding
+    ],
+)
+def test_safety_scan_decodes_before_checking(leak):
+    with pytest.raises(UnsafeFixtureError, match="owner"):
+        assert_safe({"link": leak}, [], "RealOwner")
+
+
+def test_recorded_search_pagination_is_clean_and_replays(mock_api):
+    from tests.fake_github import FakeGitHub
+    from tests.recording import Scenario, record_scenario, replay_call
+
+    fake = FakeGitHub(REAL)
+    for i in range(5):
+        fake.add_issue(f"rate limit issue {i}")
+    scenario = Scenario("paged", "search_issues", {"query": "rate", "max_results": 3}, page_size=1)
+    fixture = record_scenario(scenario, token="github_pat_fixture", real_repo=REAL, source="fake",
+                              inner=httpx.MockTransport(fake.handler), sleep=lambda _: None)
+    assert len(fixture["exchanges"]) == 3
+    assert_safe(fixture, [], "RealOwner")  # must not raise
+
+    result, replayer = replay_call(mock_api, fixture)
+    assert replayer.done
+    assert result == fixture["result"]

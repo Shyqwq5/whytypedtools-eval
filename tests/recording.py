@@ -23,6 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote, unquote_plus
 
 import httpx
 import respx
@@ -157,7 +158,26 @@ def scrub_json(data: Any) -> Any:
 
 
 def _replace_repo(text: str, real_repo: str) -> str:
-    return re.sub(re.escape(real_repo), FIXTURE_REPO, text, flags=re.IGNORECASE)
+    """Replace the real repo in plain and URL-encoded form (e.g. a `q=repo%3Aowner%2Fname`
+    query inside a Link header). Encoded forms get the encoded placeholder, so URLs
+    still decode to FIXTURE_REPO and replay matches.
+    """
+    for real, placeholder in (
+        (quote(real_repo, safe=""), quote(FIXTURE_REPO, safe="")),  # owner%2Fname
+        (real_repo, FIXTURE_REPO),
+    ):
+        text = re.sub(re.escape(real), placeholder, text, flags=re.IGNORECASE)
+    return text
+
+
+def _fully_decoded(text: str, rounds: int = 3) -> str:
+    """URL-decode repeatedly so identifiers can't hide behind (double) encoding."""
+    for _ in range(rounds):
+        decoded = unquote_plus(text)
+        if decoded == text:
+            break
+        text = decoded
+    return text
 
 
 def sanitize_exchange(request: httpx.Request, response: httpx.Response, real_repo: str) -> dict[str, Any]:
@@ -178,8 +198,13 @@ def sanitize_exchange(request: httpx.Request, response: httpx.Response, real_rep
 
 
 def assert_safe(fixture: dict[str, Any], secrets: list[str], real_owner: str) -> None:
-    """Refuse to write a fixture that still contains a secret or the real owner name."""
-    text = json.dumps(fixture)
+    """Refuse to write a fixture that still contains a secret or the real owner name.
+
+    The scan runs on the raw text and on its URL-decoded form: an encoded
+    `%3Aowner` would otherwise slip past the word-boundary check.
+    """
+    raw = json.dumps(fixture)
+    text = raw + "\n" + _fully_decoded(raw)
     for secret in secrets:
         if secret and secret in text:
             raise UnsafeFixtureError("fixture contains a secret value")
