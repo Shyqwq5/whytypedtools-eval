@@ -302,3 +302,13 @@ def test_end_to_end_with_real_registry(tmp_path, fake, client):
     assert [i["title"] for i in listed["result"]["result"]["issues"]] == ["Login fails on Safari"]
     assert unknown["error_type"] == "unknown_tool"
     assert fake.writes == []
+
+
+def test_trace_only_details_never_reach_the_model(tmp_path):
+    stub = StubTools({"bash": {"exit_code": 0, "stdout": "x", "_trace": {"guard": "allowed"}}})
+    model = ScriptedModel(tools_turn(call("bash", {"command": "ls"})), answer("done"))
+    _, trace = run(model, stub, tmp_path=tmp_path)
+    event = next(e for e in trace if e["event"] == "tool_call")
+    assert event["extra"] == {"guard": "allowed"}
+    assert "_trace" not in event["result"]
+    assert "_trace" not in tool_messages(model.seen[1][0])[0]["content"]

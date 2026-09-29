@@ -12,6 +12,9 @@ Stop conditions (the run's `status`):
 Every model turn requests at least one tool call or ends the run, so the tool
 budget also bounds the number of model calls (at most max_tool_calls + 2).
 Tool failures of any kind become tool results for the model; they never end the run.
+
+A tool result may carry a "_trace" key: trace-only details (e.g. guard decisions)
+that are written to the trace and removed before the result reaches the model.
 """
 
 from __future__ import annotations
@@ -233,6 +236,7 @@ def run_agent(
                         executed = True
                         totals.tool_calls += 1
                         result = _execute(call_tool, call, args)
+                    trace_only = result.pop("_trace", None)
                     trace.write(
                         "tool_call",
                         step=step,
@@ -244,6 +248,7 @@ def run_agent(
                         error_type=(result.get("error") or {}).get("type"),
                         result=result,
                         latency_ms=round((time.perf_counter() - started) * 1000),
+                        **({"extra": trace_only} if trace_only is not None else {}),
                     )
                     messages.append(
                         {"role": "tool", "tool_call_id": call.id,
