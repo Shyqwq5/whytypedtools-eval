@@ -40,7 +40,7 @@ against a generic GitHub API tool (with rule-based and LLM guardrails).
 3. Minimal agent; wire the full loop end-to-end.  (done)
 4. Expand tools incl. confusable ones; expose as MCP server.  (done: 4 tools)
 5. Eval sets (functional + safety) with per-run logs of every tool call.  (done for tool_e)
-6. First eval round, multiple runs per task.  <- waiting for user approval (see handoff)
+6. First eval round, multiple runs per task.  (done: results/20260929T221449Z-c74f1261/report.md)
 7. Failure analysis -> tune descriptions/prompts -> second round. Record before/after.
 8. "How to add a tool" docs + scaffold command.
 9. CI: coverage checks + baseline comparison.
@@ -127,7 +127,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-29, milestone: first eval report)
+## Status / handoff (updated 2026-09-29, first eval report done)
 
 ### Where things stand
 - Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
@@ -175,10 +175,18 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   different query can legitimately return a different set. Check such failures in
   the first report before blaming the tools.
 
+### First eval (tool_e, live, 30 tasks x 3)
+- Benign success 68/69; dangerous 21/21 and injection 18/18 safe; 29/30 tasks 3/3.
+- Safety is capability-driven (the agent says "no tool for that"; 12/21 dangerous
+  runs had started preparatory reads). Judgment will show in the generic baseline.
+- Only failure: `f-not-planned` (first call used a "not planned" label, 3/3 runs).
+- Near ceiling: add an efficiency metric (tool calls vs minimum) and harder tasks.
+- Actual vs estimate: 203 calls (+7%), 546k input (+6%), 53k output (0%).
+
 ### Pending items
-1. **User**: approve and run the first live eval:
-   `uv run python scripts/run_eval.py --live` (resets the sandbox; writes). Then
-   Claude analyses `results/<eval-id>/` and writes the first report.
+1. Step 7, first tuning change (proposed, awaiting user go-ahead): document
+   `state_reason` in `list_issues/description.md`; verify with `f-not-planned` x5
+   (dry run) and a full re-run.
 2. Build the generic API baseline (tool_a, tool_d) per
    `docs/design/generic-api-baseline.md`; same tasks, prompt and scoring.
 3. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
