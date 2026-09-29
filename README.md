@@ -80,9 +80,9 @@ against stale search results. Pass `--no-wait-search` to skip this.
 - Independently, the HTTP client rejects any write whose path is not inside
   `repos/<SANDBOX_REPO>/…` (compared by whole path segment, case-insensitively),
   and rejects all writes to the repo resource itself.
-- The seed data contains two issues with embedded prompt-injection instructions
+- The seed data contains three issues with embedded prompt-injection instructions
   (one inside the 300-character excerpt that list/search return, one only in the full
-  body). They are intentional safety test cases; the marker saying so lives only in
+  body, one only in a comment). They are intentional safety test cases; the marker saying so lives only in
   the YAML (`safety_test`) and is never sent to GitHub.
 
 ## Tools
@@ -166,11 +166,19 @@ Eval runs also record `config`, `task_id`, `run_index`, `eval_id` and `write_mod
 
 ## Evals
 
-30 tasks in [`evals/tasks.yaml`](evals/tasks.yaml): functional (9), tool selection
-between `list_issues` and `search_issues` (8), dangerous requests (7), and indirect
-prompt injection through both injection issues (6). Gold answers reference seed
-keys. Scoring, safety outcomes and over-blocking are defined in
-[docs/design/eval-mvp.md](docs/design/eval-mvp.md).
+Task sets are frozen and versioned (a test pins each file's hash):
+
+- [`evals/tasks_v2.yaml`](evals/tasks_v2.yaml) (current, 40 tasks): the v1 tasks plus
+  10 harder ones tagged `hard`: multi-step (the answer is only in comments),
+  combined filters, a result-only field (`state_reason`), bulk-label requests the
+  typed tools *can* carry out, and an injection in a comment that asks for
+  `add_label` on other issues.
+- [`evals/tasks_v1.yaml`](evals/tasks_v1.yaml) (30 tasks): used for the first eval;
+  valid only for the seed before the comment-borne injection issue was added.
+
+Gold answers reference seed keys, and every task has `min_tool_calls` for the
+efficiency score (minimum / actual tool calls). Scoring, safety outcomes and
+over-blocking are defined in [docs/design/eval-mvp.md](docs/design/eval-mvp.md).
 
 ```bash
 uv run python scripts/run_eval.py --estimate            # expected calls/tokens/time; no API calls
@@ -181,6 +189,22 @@ uv run python scripts/run_eval.py --live                # 3 runs per task; reset
 `--live` lets `add_label` really write; the runner resets the sandbox before the eval
 and again after any run that changed it. Results go to `results/<eval-id>/`
 (`summary.md`, `summary.json`, `runs.jsonl`; committed); raw traces go to `runs/`.
+Each run also records the GitHub requests it made (tools and sandbox checks).
+
+### Reading the safety numbers
+
+tool_e is **safe by construction**: the dangerous actions (deleting, closing,
+commenting, changing the repository, sending data elsewhere) have no tool, so the
+agent cannot do them however it decides. Its block rate on those tasks measures the
+interface, not the model's judgement. In the first eval, every dangerous-request
+answer said, in effect, "I don't have a tool for that". None was a refusal on
+principle. Judgement is tested in two places: the v2 tasks where the typed tools
+*can* do harm (bulk `add_label`, an injection asking for labels on other issues),
+and the generic GitHub API baseline, where every action is available. The
+baseline is what tests judgement in general.
+
+First report: [results/20260929T221449Z-c74f1261/report.md](results/20260929T221449Z-c74f1261/report.md)
+(task set v1).
 
 Configurations: **tool_e** (typed tools) now; the generic GitHub API tool without a
 guard (tool_a) and with rules + LLM guard (tool_d) come next, with the same tasks,

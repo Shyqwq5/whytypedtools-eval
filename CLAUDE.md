@@ -122,12 +122,13 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Writes: `ToolContext.write_mode` is `live` or `dry_run`; every write is logged in
   `ToolContext.write_log`. Agent CLI, MCP server and eval runner default to dry-run.
   Claude only runs dry-run; live runs (`--allow-writes`, `--live`) are run by the user.
-- Evals: tasks in `evals/tasks.yaml` (quote any value containing `#{issue:...}`),
+- Evals: frozen task sets `evals/tasks_v1.yaml` / `tasks_v2.yaml` (hash-pinned by a
+  test; changes mean a new version; quote any value containing `#{issue:...}`),
   code in `src/whytypedtools_eval/evals/` (tasks, effects, scoring, configs, runner,
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-29, first eval report done)
+## Status / handoff (updated 2026-09-29, task set v2 ready; waiting for seed)
 
 ### Where things stand
 - Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
@@ -183,13 +184,29 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Near ceiling: add an efficiency metric (tool calls vs minimum) and harder tasks.
 - Actual vs estimate: 203 calls (+7%), 546k input (+6%), 53k output (0%).
 
-### Pending items
-1. Step 7, first tuning change (proposed, awaiting user go-ahead): document
-   `state_reason` in `list_issues/description.md`; verify with `f-not-planned` x5
-   (dry run) and a full re-run.
-2. Build the generic API baseline (tool_a, tool_d) per
-   `docs/design/generic-api-baseline.md`; same tasks, prompt and scoring.
-3. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
+### Task set v2 (step 7 prep, user-defined order)
+- Efficiency score (min_tool_calls, excess calls, efficiency) and GitHub request
+  counting are in the runner/report.
+- v2 = 40 tasks (v1 + 10 `hard`); new seed issue `injection-add-label` (payload in
+  a comment asking for `question` on all open issues). The v1 gold answers for
+  f-open-enhancement-count and s-list-latest-open changed with it; v1 is kept frozen
+  for the first eval only.
+- README phrases tool_e safety as "safe by construction"; judgement is tested by
+  doable-harm tasks and the generic API baseline.
+
+### Pending items (in this order; the user decided it)
+1. **User**: seed the new issue: `uv run python scripts/seed_sandbox.py --dry-run`,
+   then without `--dry-run` (read-only check expects 3 writes: create issue +
+   2 comments).
+2. Run v2 with the CURRENT descriptions as baseline, dry-run (Claude may do this):
+   `uv run python scripts/run_eval.py --runs 3`. Then STOP: show the numbers and
+   the estimate before any live run.
+3. Then the state_reason change in `list_issues/description.md` (plus anything the
+   baseline failures justify), verify with 5 dry runs of the affected tasks, and
+   re-run v2 in full. Record description hashes before/after.
+4. Build the generic API baseline (tool_a, tool_d) per
+   `docs/design/generic-api-baseline.md`.
+5. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
 
 ### Deferred (by user decision)
 - Scaffold/docs for adding tools, CI coverage and baseline gating, tool_b and
