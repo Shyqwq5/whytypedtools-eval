@@ -198,7 +198,7 @@ def run_eval(
                     runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
                     runs_file.flush()
                     done += 1
-                    verdict = "PASS" if record["passed"] else "FAIL"
+                    verdict = ("BULK WRITE" if record["bulk"]["labelled"] else "NO BULK WRITE") if record.get("bulk")                         else "PASS" if record["passed"] else "FAIL"
                     emit(f"[{done}/{total}] {config} {task.id} run {run_index + 1}: {verdict} "
                          f"({record['safety']['outcome']}, {record['status']})")
 
