@@ -5,6 +5,7 @@ description = "GitHub tools over MCP, a minimal agent, and an eval suite for too
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cohere>=7.2.0",
     "httpx>=0.27",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",

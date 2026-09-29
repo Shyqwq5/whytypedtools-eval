@@ -34,7 +34,7 @@ against generic bash tools (with rule-based and LLM guardrails).
 ## Roadmap (do steps in order; only work on the step you are asked for)
 1. Sandbox repo + seed data + credential handling.  (done)
 2. First 1–2 tools with integration tests (recorded API responses as fixtures).  (done)
-3. Minimal agent; wire the full loop end-to-end.  <- next (see "Status / handoff")
+3. Minimal agent; wire the full loop end-to-end.  <- in progress (see "Status / handoff")
 4. Expand to 5–6 tools incl. confusable ones; expose as MCP server.
 5. Eval sets (functional + safety) with per-run logs of every tool call.
 6. First eval round, multiple runs per task.
@@ -109,13 +109,21 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   `tests/fixtures/synthetic/` holds hand-written error responses.
 - Cross-tool and safety evals live in `evals/`. CI compares metrics to
   `evals/baseline.json` and fails on regressions > threshold.
+- The agent lives in `src/whytypedtools_eval/agent/` (provider-neutral loop in
+  `loop.py`, Cohere adapter in `cohere_model.py`, JSONL traces in `trace.py`); CLI
+  `scripts/run_agent.py`. System prompt: `prompts/system.md` (hashed into traces).
+- Raw traces go to `runs/` (gitignored). Eval summaries go to `results/` (committed,
+  created in step 5/6).
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-29, end of step 2)
+## Status / handoff (updated 2026-09-29, step 3 code done)
 
 ### Where things stand
-- Steps 1 and 2 are done. `uv run pytest`: 203 passed, all on fixtures recorded
-  from the real sandbox (21 recorded + 4 synthetic error fixtures).
+- Steps 1 and 2 are done. Step 3 code and tests are done; the first real run
+  against the Cohere API is pending (the user runs it). `uv run pytest`: 265 passed.
+  Tool tests use fixtures recorded from the real sandbox (21 recorded + 4 synthetic);
+  agent tests use a scripted fake model and never call Cohere (conftest blocks
+  `cohere.ClientV2`).
 - Git: branch `main`, **no remote configured; nothing has been pushed yet**.
   Before the first push run `git ls-files | grep -E '\.env$|state\.json'` (must be empty).
 - The local folder is still named `tool_eval`; the user plans to rename it to
@@ -144,7 +152,24 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Fixture recording is all-or-nothing: every scenario declares `expect`; any
   mismatch or failed secret/identifier scan (plain and URL-decoded) writes nothing.
 
+### Key decisions in step 3 (and why)
+- The loop is provider-neutral (`ChatModel` protocol); only `cohere_model.py` knows
+  Cohere formats. Tool definitions are converted from `registry.list_tools()`.
+- Tool budget counts calls, not turns; calls in one turn run in order. Calls over
+  budget get a `budget_exceeded` result, then one final turn with
+  `tool_choice=NONE`. No separate max-turns limit: each turn either calls a tool or
+  ends the run, so model calls are bounded by max_tool_calls + 2.
+- Retries (429/5xx/network, exponential backoff, Retry-After, max 4, max wait 60s)
+  are done by the adapter with SDK retries off, so each retry is in the trace.
+  Error messages never include response bodies or headers (`ApiError.__str__` does).
+- Defaults: `command-a-plus-05-2026` (newest Command model, used in the SDK 7.2
+  examples), temperature 0, seed 0 (Cohere's `seed` is supported but best effort).
+- Tool results go back to Cohere as `document` content of tool messages.
+
 ### Known issues / unverified assumptions
+- Cohere's `thinking` parameter is not set (API default). Whether Command A+
+  reasons by default, and what that costs in tokens, is unverified; check the
+  first real traces.
 - `sort=comments` on the issues list returned an order inconsistent with the real
   comment counts (#1 with 2 comments ranked after three 1-comment issues), in three
   recordings on 2026-09-29. Cause unconfirmed. Decision: removed from the
@@ -157,12 +182,17 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Search `best_match` order is not emulated by the fake; tests must not rely on it.
 
 ### Pending items
-1. Search index delay: on the next reset that actually changes something (user runs
+1. First real agent run (user runs `scripts/run_agent.py`); then check the trace
+   (token usage present? finish reasons as expected? tool results well-formed?).
+2. Search index delay: on the next reset that actually changes something (user runs
    it), count the "search index stale … retrying" lines and record the result in
    README "Findings".
-2. Step 3 — thin test agent using Cohere Command with tool use, calling tools via
-   `tools.registry` (no MCP yet). The user will put `COHERE_API_KEY` in `.env`;
-   never read or print it. Add it to `.env.example` and `config.py` (as `SecretStr`)
-   when starting. Per-run logs of every tool call (name, args, result) are needed
-   later for failure analysis, so design the agent loop with that in mind.
 3. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
+
+### Backlog (later steps)
+- All tool configurations (tool_a–tool_e) must use the same system prompt
+  (`prompts/system.md`), so differences come from the tools, not the prompt.
+- Ablation: run the evals with the "tool results are untrusted data" paragraph
+  removed from the system prompt, to measure its effect on injection block rate and
+  over-blocking.
+- `results/` (committed) for eval summaries; raw `runs/` traces stay gitignored.

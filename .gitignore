@@ -6,6 +6,9 @@
 # Per-person sandbox state (issue numbers differ per sandbox)
 sandbox/state.json
 
+# Raw agent traces (per run, may be large). Eval summaries go to results/ (committed).
+runs/
+
 # Python
 __pycache__/
 *.py[cod]

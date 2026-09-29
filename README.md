@@ -97,6 +97,44 @@ headers, and replace your repo name with `sandbox-owner/whytypedtools-sandbox`. 
 recorder refuses to write any fixture that still contains your token or username.
 `--fake` regenerates the fixtures from an in-memory fake instead.
 
+## Test agent
+
+A minimal agent (Cohere Command, tool use) that calls the tools directly through
+`tools/registry.py` (no MCP yet). Tool schemas and descriptions come from the
+registry and each tool's `description.md`; the system prompt is `prompts/system.md`.
+
+```bash
+# needs COHERE_API_KEY in .env (optional: COHERE_MODEL)
+uv run python scripts/run_agent.py "Which open issues are labelled bug?"
+uv run python scripts/run_agent.py --help   # --model, --max-tool-calls, --temperature, --seed, ...
+```
+
+It prints the final answer, the run status and the trace path; the exit code is 0
+only for status `completed`. Defaults: model `command-a-plus-05-2026`,
+temperature 0, seed 0, at most 10 tool calls per run.
+
+Run statuses: `completed`, `no_answer`, `max_tool_calls` (calls over budget are not
+run; the model then answers with tools disabled), `max_tokens`, `model_error`
+(Cohere failed after retries on 429/5xx/network errors, or a non-retryable error),
+`crashed` (bug in the loop). Tool errors never end a run; they are returned to the
+model as tool results.
+
+### Agent traces
+
+Every run writes `runs/<YYYY-MM-DD>/<run_id>.jsonl` (gitignored; eval summaries
+will be committed under `results/`). One JSON event per line:
+
+| Event | Fields |
+|---|---|
+| `run_start` | `trace_version`, `run_id`, `started_at`, `task`, `model` (provider, model, temperature, seed, sdk_version), `max_tool_calls`, `system_prompt` (path, sha256), `tools` (name, `description_sha256`, `schema_sha256`), `git_commit`, `git_dirty` |
+| `model_call` | `step`, `allow_tools`, `latency_ms`, `retries` (reason, wait_seconds), `finish_reason`, `text`, `tool_plan`, `tool_calls` (id, name, raw arguments), `usage` (input/output tokens, billed input/output tokens); or `error` (message, status) |
+| `tool_call` | `step`, `call_id`, `name`, `arguments` (parsed, or the raw string if invalid), `executed`, `ok`, `error_type`, `result`, `latency_ms` |
+| `run_end` | `status`, `final_answer`, `totals` (model_calls, tool_calls, input_tokens, output_tokens, latency_ms) |
+
+Every event also has `event` and `ts`. The hashes identify exactly which prompt and
+tool descriptions produced a run, for before/after comparisons. The values of
+`GITHUB_TOKEN` and `COHERE_API_KEY` are replaced with `[REDACTED]` before writing.
+
 ## Findings
 
 Differences between the real GitHub API and our assumptions or in-memory fake,
@@ -109,6 +147,7 @@ found by recording against a real sandbox.
 | 422 wording (too many operators) | Real message: "More than five AND / OR / NOT operators were used." | Fake updated to match. |
 | Compressed responses | GitHub gzips most responses; this broke the first version of the fixture recorder. | Fixed; regression test added. |
 | Search index lag | `wait_for_search_index` succeeded on the first check in every real run so far, but those runs made no writes, so actual lag after writes is still unmeasured. | Keep waiting after seed/reset; measure on the next reset that makes changes. |
+| Agent determinism | Cohere's SDK documents `seed` as best effort ("determinism cannot be totally guaranteed"); temperature 0 does not guarantee identical outputs either. From documentation; run-to-run variance not yet measured. | The agent sends temperature 0 and seed 0 by default and records both in every trace, but eval tasks run several times and we report mean and consistency. |
 
 ## Development
 

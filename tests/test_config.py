@@ -35,3 +35,25 @@ def test_valid_settings_hide_token(monkeypatch):
     assert s.sandbox_repo == "me/sandbox"
     assert s.github_token.get_secret_value() == "github_pat_secret123"
     assert "secret123" not in repr(s)
+
+
+def test_cohere_key_is_optional_for_sandbox_scripts(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "github_pat_real")
+    monkeypatch.setenv("SANDBOX_REPO", "me/sandbox")
+    monkeypatch.setenv("COHERE_API_KEY", "  ")
+    s = load_settings(env_file=None)
+    assert s.cohere_api_key is None
+    assert s.cohere_model == "command-a-plus-05-2026"
+    with pytest.raises(ConfigError, match="COHERE_API_KEY is not set"):
+        s.require_cohere_key()
+
+
+def test_cohere_settings_hide_key(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "github_pat_real")
+    monkeypatch.setenv("SANDBOX_REPO", "me/sandbox")
+    monkeypatch.setenv("COHERE_API_KEY", "co-secret-456789")
+    monkeypatch.setenv("COHERE_MODEL", "command-other")
+    s = load_settings(env_file=None)
+    assert s.require_cohere_key().get_secret_value() == "co-secret-456789"
+    assert s.cohere_model == "command-other"
+    assert "456789" not in repr(s)

@@ -17,9 +17,14 @@ SEED_FILE = Path(__file__).resolve().parents[1] / "sandbox" / "seed_data.yaml"
 
 @pytest.fixture(autouse=True)
 def _no_real_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep the developer's real token out of every test."""
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.delenv("SANDBOX_REPO", raising=False)
+    """Keep the developer's real tokens out of every test, and never reach Cohere."""
+    for name in ("GITHUB_TOKEN", "SANDBOX_REPO", "COHERE_API_KEY", "COHERE_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+
+    def _no_real_cohere(*args: object, **kwargs: object) -> None:
+        raise AssertionError("tests must not construct a real Cohere client")
+
+    monkeypatch.setattr("cohere.ClientV2.__init__", _no_real_cohere)
 
 
 @pytest.fixture
