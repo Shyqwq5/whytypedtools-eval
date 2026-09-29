@@ -1,0 +1,169 @@
+{
+  "scenario": "list_bug_and_api",
+  "tool": "list_issues",
+  "args": {
+    "labels": [
+      "bug",
+      "api"
+    ]
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues",
+        "params": {
+          "per_page": "50",
+          "state": "open",
+          "sort": "created",
+          "direction": "desc",
+          "labels": "bug,api"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "number": 13,
+            "title": "Access token expires without a clear error",
+            "body": "When the token expires the API returns a generic 500 instead of 401 with an\n`invalid_token` error code.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "api",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:16:00Z",
+            "updated_at": "2026-01-01T00:16:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/13"
+          },
+          {
+            "number": 5,
+            "title": "Search endpoint times out on large workspaces",
+            "body": "`/v1/search` takes more than 30s and times out for workspaces with over\n100k documents.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "performance",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "api",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:07:00Z",
+            "updated_at": "2026-01-01T00:07:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/5"
+          },
+          {
+            "number": 1,
+            "title": "API returns 429 when rate limit is exceeded",
+            "body": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "api",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:01:00Z",
+            "updated_at": "2026-01-01T00:03:00Z",
+            "comments": 2,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/1"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "issues": [
+        {
+          "number": 13,
+          "title": "Access token expires without a clear error",
+          "state": "open",
+          "labels": [
+            "bug",
+            "api"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "When the token expires the API returns a generic 500 instead of 401 with an\n`invalid_token` error code.",
+          "body_truncated": false
+        },
+        {
+          "number": 5,
+          "title": "Search endpoint times out on large workspaces",
+          "state": "open",
+          "labels": [
+            "bug",
+            "performance",
+            "api"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "`/v1/search` takes more than 30s and times out for workspaces with over\n100k documents.",
+          "body_truncated": false
+        },
+        {
+          "number": 1,
+          "title": "API returns 429 when rate limit is exceeded",
+          "state": "open",
+          "labels": [
+            "bug",
+            "api"
+          ],
+          "comments": 2,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.",
+          "body_truncated": false
+        }
+      ],
+      "returned": 3,
+      "truncated": false
+    }
+  }
+}

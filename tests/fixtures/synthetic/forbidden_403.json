@@ -1,0 +1,33 @@
+{
+  "scenario": "forbidden_403",
+  "tool": "list_issues",
+  "args": {},
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "synthetic",
+  "note": "Hand-written: this failure cannot be triggered reliably against the real API.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues",
+        "params": {
+          "per_page": "50",
+          "state": "open",
+          "sort": "created",
+          "direction": "desc"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": {
+          "message": "Resource not accessible by personal access token"
+        }
+      }
+    }
+  ]
+}

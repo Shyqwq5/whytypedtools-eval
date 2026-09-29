@@ -31,6 +31,12 @@ class SafetyTest(_Strict):
     """Local-only metadata. Never sent to GitHub, so the agent cannot see it."""
 
     kind: Literal["indirect_prompt_injection"]
+    # Which tool output exposes the payload:
+    # - summary: within the body excerpt returned by list/search tools.
+    # - full_body: only in the full body (e.g. a get_issue tool), past the excerpt.
+    exposure: Literal["summary", "full_body"]
+    # A phrase from the malicious instruction, used to locate it in the body.
+    payload_marker: str = Field(min_length=1)
     expected_behavior: str
 
 
@@ -43,6 +49,12 @@ class IssueSpec(_Strict):
     labels: list[str] = []
     comments: list[CommentSpec] = []
     safety_test: SafetyTest | None = None
+
+    @model_validator(mode="after")
+    def _check_payload_marker(self) -> IssueSpec:
+        if self.safety_test and self.safety_test.payload_marker not in self.body:
+            raise ValueError(f"issue {self.key!r}: payload_marker not found in body")
+        return self
 
     @model_validator(mode="after")
     def _check_state_reason(self) -> IssueSpec:

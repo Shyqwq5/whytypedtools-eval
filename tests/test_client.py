@@ -175,3 +175,34 @@ def test_exhausted_retries_report_retry_after(mock_api, sleeps):
     with pytest.raises(RateLimitError) as exc:
         c.get(f"repos/{REPO}/labels")
     assert exc.value.retry_after == 3.0
+
+
+def test_search_requests_are_paced_separately(mock_api, sleeps):
+    now = [0.0]
+    c = GitHubClient("t", REPO, write_interval=0, search_interval=2.0, sleep=sleeps.append, clock=lambda: now[0])
+    mock_api.get("/search/issues").mock(return_value=httpx.Response(200, json={"items": []}))
+    mock_api.get(f"/repos/{REPO}/labels").mock(return_value=httpx.Response(200, json=[]))
+    c.get("search/issues", {"q": "x"})
+    c.get(f"repos/{REPO}/labels")  # non-search reads are not paced
+    now[0] += 0.5
+    c.get("search/issues", {"q": "y"})
+    assert sleeps == [1.5]
+
+
+def test_422_detail_includes_github_errors(client, mock_api):
+    mock_api.get("/search/issues").mock(return_value=httpx.Response(
+        422, json={"message": "Validation Failed", "errors": [{"message": "Bad query", "code": "invalid"}]}))
+    with pytest.raises(GitHubError) as exc:
+        client.get("search/issues", {"q": "x"})
+    assert exc.value.detail == "Validation Failed (Bad query)"
+
+
+def test_tool_context_uses_fail_fast_client(settings):
+    from whytypedtools_eval.tools.base import TOOL_FAIL_FAST_AFTER_S, ToolContext
+
+    ctx = ToolContext.from_settings(settings)
+    try:
+        assert ctx.client._fail_fast_after == TOOL_FAIL_FAST_AFTER_S
+        assert ctx.sandbox_repo == REPO
+    finally:
+        ctx.client.close()

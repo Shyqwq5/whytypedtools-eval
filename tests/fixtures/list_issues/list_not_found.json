@@ -1,0 +1,41 @@
+{
+  "scenario": "list_not_found",
+  "tool": "list_issues",
+  "args": {},
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "-does-not-exist",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox-does-not-exist/issues",
+        "params": {
+          "per_page": "50",
+          "state": "open",
+          "sort": "created",
+          "direction": "desc"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": {
+          "message": "Not Found"
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": false,
+    "error": {
+      "type": "not_found",
+      "message": "GitHub returned 404: the repository or resource was not found, or the token cannot see it.",
+      "retryable": false,
+      "retry_after_seconds": null
+    }
+  }
+}

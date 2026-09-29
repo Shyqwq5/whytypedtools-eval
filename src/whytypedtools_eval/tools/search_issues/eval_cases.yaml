@@ -1,0 +1,15 @@
+# Eval cases for search_issues. Filled in during roadmap step 5.
+#
+# Case schema:
+#   - id: unique-slug
+#     kind: functional              # functional | safety
+#     prompt: "User request given to the agent."
+#     expected:
+#       tool: search_issues                    # tool the agent should pick
+#       args_subset: {}             # arguments that must match (others are free)
+#       result_keys: []             # seed issue keys expected in the answer;
+#                                   # resolved to numbers via sandbox/state.json
+#     runs: 3                       # repetitions (LLM output is non-deterministic)
+version: 1
+tool: search_issues
+cases: []

@@ -1,0 +1,298 @@
+{
+  "scenario": "list_closed",
+  "tool": "list_issues",
+  "args": {
+    "state": "closed"
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues",
+        "params": {
+          "per_page": "50",
+          "state": "closed",
+          "sort": "created",
+          "direction": "desc"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "number": 20,
+            "title": "Typo on settings page: 'Prefrences'",
+            "body": "The settings page header says \"Prefrences\".\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:25:00Z",
+            "updated_at": "2026-01-01T00:25:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/20"
+          },
+          {
+            "number": 19,
+            "title": "Where is the changelog for v2?",
+            "body": "I can't find release notes for v2.0.\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "question",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "documentation",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:24:00Z",
+            "updated_at": "2026-01-01T00:24:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/19"
+          },
+          {
+            "number": 16,
+            "title": "Pagination example in README is wrong",
+            "body": "The README example uses `page=0`, but pages start at 1.\n",
+            "state": "closed",
+            "state_reason": "not_planned",
+            "labels": [
+              {
+                "name": "documentation",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:20:00Z",
+            "updated_at": "2026-01-01T00:21:00Z",
+            "comments": 1,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/16"
+          },
+          {
+            "number": 12,
+            "title": "Export guide has outdated screenshots",
+            "body": "The export guide still shows the old UI from v1.\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "documentation",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:15:00Z",
+            "updated_at": "2026-01-01T00:15:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/12"
+          },
+          {
+            "number": 8,
+            "title": "Memory leak in background worker",
+            "body": "The worker process grows by ~200MB per hour until it is OOM-killed.\nFixed by closing HTTP sessions after each job.\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "performance",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:10:00Z",
+            "updated_at": "2026-01-01T00:10:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/8"
+          },
+          {
+            "number": 6,
+            "title": "Allow configuring the client request timeout",
+            "body": "The SDK hardcodes a 10s timeout. Expose it as a constructor option.\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "enhancement",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:08:00Z",
+            "updated_at": "2026-01-01T00:08:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/6"
+          },
+          {
+            "number": 2,
+            "title": "Document rate limit headers",
+            "body": "The docs should explain `X-RateLimit-Limit`, `X-RateLimit-Remaining` and\n`X-RateLimit-Reset`, with an example of backing off.\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "documentation",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "api",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:04:00Z",
+            "updated_at": "2026-01-01T00:04:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/2"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "issues": [
+        {
+          "number": 20,
+          "title": "Typo on settings page: 'Prefrences'",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "bug"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The settings page header says \"Prefrences\".",
+          "body_truncated": false
+        },
+        {
+          "number": 19,
+          "title": "Where is the changelog for v2?",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "question",
+            "documentation"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "I can't find release notes for v2.0.",
+          "body_truncated": false
+        },
+        {
+          "number": 16,
+          "title": "Pagination example in README is wrong",
+          "state": "closed",
+          "state_reason": "not_planned",
+          "labels": [
+            "documentation"
+          ],
+          "comments": 1,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The README example uses `page=0`, but pages start at 1.",
+          "body_truncated": false
+        },
+        {
+          "number": 12,
+          "title": "Export guide has outdated screenshots",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "documentation"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The export guide still shows the old UI from v1.",
+          "body_truncated": false
+        },
+        {
+          "number": 8,
+          "title": "Memory leak in background worker",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "bug",
+            "performance"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The worker process grows by ~200MB per hour until it is OOM-killed.\nFixed by closing HTTP sessions after each job.",
+          "body_truncated": false
+        },
+        {
+          "number": 6,
+          "title": "Allow configuring the client request timeout",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "enhancement"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The SDK hardcodes a 10s timeout. Expose it as a constructor option.",
+          "body_truncated": false
+        },
+        {
+          "number": 2,
+          "title": "Document rate limit headers",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "documentation",
+            "api"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The docs should explain `X-RateLimit-Limit`, `X-RateLimit-Remaining` and\n`X-RateLimit-Reset`, with an example of backing off.",
+          "body_truncated": false
+        }
+      ],
+      "returned": 7,
+      "truncated": false
+    }
+  }
+}

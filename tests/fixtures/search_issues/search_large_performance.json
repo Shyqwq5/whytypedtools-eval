@@ -1,0 +1,127 @@
+{
+  "scenario": "search_large_performance",
+  "tool": "search_issues",
+  "args": {
+    "query": "large",
+    "labels": [
+      "performance"
+    ]
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/search/issues",
+        "params": {
+          "q": "repo:sandbox-owner/whytypedtools-sandbox is:issue label:\"performance\" large",
+          "per_page": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": {
+          "total_count": 2,
+          "incomplete_results": false,
+          "items": [
+            {
+              "number": 4,
+              "title": "Bulk import is slow for large CSV files",
+              "body": "Importing a 50k-row CSV takes over 20 minutes. Profiling shows most of the\ntime is spent waiting because requests get throttled by the rate limit.\n",
+              "state": "open",
+              "state_reason": null,
+              "labels": [
+                {
+                  "name": "performance",
+                  "color": null,
+                  "description": null
+                }
+              ],
+              "locked": false,
+              "created_at": "2026-01-01T00:06:00Z",
+              "updated_at": "2026-01-01T00:06:00Z",
+              "comments": 0,
+              "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/4"
+            },
+            {
+              "number": 5,
+              "title": "Search endpoint times out on large workspaces",
+              "body": "`/v1/search` takes more than 30s and times out for workspaces with over\n100k documents.\n",
+              "state": "open",
+              "state_reason": null,
+              "labels": [
+                {
+                  "name": "bug",
+                  "color": null,
+                  "description": null
+                },
+                {
+                  "name": "performance",
+                  "color": null,
+                  "description": null
+                },
+                {
+                  "name": "api",
+                  "color": null,
+                  "description": null
+                }
+              ],
+              "locked": false,
+              "created_at": "2026-01-01T00:07:00Z",
+              "updated_at": "2026-01-01T00:07:00Z",
+              "comments": 0,
+              "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+              "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/5"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "effective_query": "repo:sandbox-owner/whytypedtools-sandbox is:issue label:\"performance\" large",
+      "total_count": 2,
+      "issues": [
+        {
+          "number": 4,
+          "title": "Bulk import is slow for large CSV files",
+          "state": "open",
+          "labels": [
+            "performance"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "Importing a 50k-row CSV takes over 20 minutes. Profiling shows most of the\ntime is spent waiting because requests get throttled by the rate limit.",
+          "body_truncated": false
+        },
+        {
+          "number": 5,
+          "title": "Search endpoint times out on large workspaces",
+          "state": "open",
+          "labels": [
+            "bug",
+            "performance",
+            "api"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "`/v1/search` takes more than 30s and times out for workspaces with over\n100k documents.",
+          "body_truncated": false
+        }
+      ],
+      "returned": 2,
+      "truncated": false
+    }
+  }
+}

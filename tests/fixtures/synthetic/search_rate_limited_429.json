@@ -1,0 +1,35 @@
+{
+  "scenario": "search_rate_limited_429",
+  "tool": "search_issues",
+  "args": {
+    "query": "rate limit"
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "synthetic",
+  "note": "Hand-written: this failure cannot be triggered reliably against the real API.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/search/issues",
+        "params": {
+          "q": "repo:sandbox-owner/whytypedtools-sandbox is:issue rate limit",
+          "per_page": "10"
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "retry-after": "60",
+          "x-ratelimit-resource": "search"
+        },
+        "json": {
+          "message": "You have exceeded a secondary rate limit."
+        }
+      }
+    }
+  ]
+}

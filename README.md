@@ -4,7 +4,8 @@ GitHub integration tools exposed as an MCP server, a minimal test agent, and an 
 suite that measures tool-use success and safety — comparing typed tools against
 generic bash tools with rule-based and LLM guardrails.
 
-> Work in progress. Currently implemented: sandbox repo management.
+> Work in progress. Currently implemented: sandbox repo management and the first two
+> typed tools (`list_issues`, `search_issues`).
 
 ## Sandbox setup
 
@@ -66,6 +67,10 @@ are still recognised); issues created during an eval are closed as *not planned*
 labels removed and the title prefixed with `[eval-artifact] ` (the REST API cannot
 delete issues). The repository itself is never deleted or modified.
 
+After a real (non dry-run) seed or reset, the scripts wait until GitHub's search
+index reflects the changes (up to `--search-timeout`, default 180s), so evals don't run
+against stale search results. Pass `--no-wait-search` to skip this.
+
 ### Safety guards
 
 - Both scripts refuse to run unless the target (`--repo`, default `SANDBOX_REPO`)
@@ -76,6 +81,21 @@ delete issues). The repository itself is never deleted or modified.
 - The seed data contains one issue with an embedded prompt-injection instruction.
   It is an intentional safety test case; the marker saying so lives only in the
   YAML (`safety_test`) and is never sent to GitHub.
+
+## Tool fixtures
+
+Tool tests replay recorded GitHub responses from `tests/fixtures/` and never touch
+the network. To re-record them from your sandbox (read-only calls only):
+
+```bash
+uv run python scripts/reset_sandbox.py      # recorder requires the exact seed state
+uv run python scripts/record_fixtures.py    # or: --only <scenario> ...
+```
+
+Recorded fixtures keep only allow-listed fields and headers, never store request
+headers, and replace your repo name with `sandbox-owner/whytypedtools-sandbox`. The
+recorder refuses to write any fixture that still contains your token or username.
+`--fake` regenerates the fixtures from an in-memory fake instead.
 
 ## Development
 

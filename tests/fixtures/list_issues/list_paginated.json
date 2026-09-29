@@ -1,0 +1,384 @@
+{
+  "scenario": "list_paginated",
+  "tool": "list_issues",
+  "args": {
+    "state": "all",
+    "max_results": 8
+  },
+  "page_size": 3,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues",
+        "params": {
+          "per_page": "3",
+          "state": "all",
+          "sort": "created",
+          "direction": "desc"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "link": "<https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox/issues?per_page=3&state=all&sort=created&direction=desc&page=2>; rel=\"next\"",
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "number": 21,
+            "title": "Login page flickers on Safari",
+            "body": "On Safari 17 the login form flashes white before rendering.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [],
+            "locked": false,
+            "created_at": "2026-01-01T00:26:00Z",
+            "updated_at": "2026-01-01T00:26:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/21"
+          },
+          {
+            "number": 20,
+            "title": "Typo on settings page: 'Prefrences'",
+            "body": "The settings page header says \"Prefrences\".\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:25:00Z",
+            "updated_at": "2026-01-01T00:25:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/20"
+          },
+          {
+            "number": 19,
+            "title": "Where is the changelog for v2?",
+            "body": "I can't find release notes for v2.0.\n",
+            "state": "closed",
+            "state_reason": "completed",
+            "labels": [
+              {
+                "name": "question",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "documentation",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:24:00Z",
+            "updated_at": "2026-01-01T00:24:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/19"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues",
+        "params": {
+          "per_page": "3",
+          "state": "all",
+          "sort": "created",
+          "direction": "desc",
+          "page": "2"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "link": "<https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox/issues?per_page=3&state=all&sort=created&direction=desc&page=3>; rel=\"next\"",
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "number": 18,
+            "title": "Webhooks are not retried after a 5xx response",
+            "body": "If the receiver returns 503, the webhook is dropped. It should retry with\nexponential backoff.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:23:00Z",
+            "updated_at": "2026-01-01T00:23:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/18"
+          },
+          {
+            "number": 17,
+            "title": "Dark mode for the web app",
+            "body": "Please add a dark theme that follows the OS setting.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "enhancement",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:22:00Z",
+            "updated_at": "2026-01-01T00:22:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/17"
+          },
+          {
+            "number": 16,
+            "title": "Pagination example in README is wrong",
+            "body": "The README example uses `page=0`, but pages start at 1.\n",
+            "state": "closed",
+            "state_reason": "not_planned",
+            "labels": [
+              {
+                "name": "documentation",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:20:00Z",
+            "updated_at": "2026-01-01T00:21:00Z",
+            "comments": 1,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/16"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues",
+        "params": {
+          "per_page": "3",
+          "state": "all",
+          "sort": "created",
+          "direction": "desc",
+          "page": "3"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "link": "<https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox/issues?per_page=3&state=all&sort=created&direction=desc&page=4>; rel=\"next\"",
+          "content-type": "application/json"
+        },
+        "json": [
+          {
+            "number": 15,
+            "title": "Switch list endpoints to cursor pagination",
+            "body": "Offset pagination skips items when data changes between pages. Move list\nendpoints to cursor-based pagination.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "enhancement",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "api",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:19:00Z",
+            "updated_at": "2026-01-01T00:19:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/15"
+          },
+          {
+            "number": 14,
+            "title": "Which OAuth scopes are needed for read-only access?",
+            "body": "I only need to read items. What is the minimum set of scopes?\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "question",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:17:00Z",
+            "updated_at": "2026-01-01T00:18:00Z",
+            "comments": 1,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/14"
+          },
+          {
+            "number": 13,
+            "title": "Access token expires without a clear error",
+            "body": "When the token expires the API returns a generic 500 instead of 401 with an\n`invalid_token` error code.\n",
+            "state": "open",
+            "state_reason": null,
+            "labels": [
+              {
+                "name": "bug",
+                "color": null,
+                "description": null
+              },
+              {
+                "name": "api",
+                "color": null,
+                "description": null
+              }
+            ],
+            "locked": false,
+            "created_at": "2026-01-01T00:16:00Z",
+            "updated_at": "2026-01-01T00:16:00Z",
+            "comments": 0,
+            "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+            "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/13"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "issues": [
+        {
+          "number": 21,
+          "title": "Login page flickers on Safari",
+          "state": "open",
+          "labels": [],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "On Safari 17 the login form flashes white before rendering.",
+          "body_truncated": false
+        },
+        {
+          "number": 20,
+          "title": "Typo on settings page: 'Prefrences'",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "bug"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The settings page header says \"Prefrences\".",
+          "body_truncated": false
+        },
+        {
+          "number": 19,
+          "title": "Where is the changelog for v2?",
+          "state": "closed",
+          "state_reason": "completed",
+          "labels": [
+            "question",
+            "documentation"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "I can't find release notes for v2.0.",
+          "body_truncated": false
+        },
+        {
+          "number": 18,
+          "title": "Webhooks are not retried after a 5xx response",
+          "state": "open",
+          "labels": [
+            "bug"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "If the receiver returns 503, the webhook is dropped. It should retry with\nexponential backoff.",
+          "body_truncated": false
+        },
+        {
+          "number": 17,
+          "title": "Dark mode for the web app",
+          "state": "open",
+          "labels": [
+            "enhancement"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "Please add a dark theme that follows the OS setting.",
+          "body_truncated": false
+        },
+        {
+          "number": 16,
+          "title": "Pagination example in README is wrong",
+          "state": "closed",
+          "state_reason": "not_planned",
+          "labels": [
+            "documentation"
+          ],
+          "comments": 1,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "The README example uses `page=0`, but pages start at 1.",
+          "body_truncated": false
+        },
+        {
+          "number": 15,
+          "title": "Switch list endpoints to cursor pagination",
+          "state": "open",
+          "labels": [
+            "enhancement",
+            "api"
+          ],
+          "comments": 0,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "Offset pagination skips items when data changes between pages. Move list\nendpoints to cursor-based pagination.",
+          "body_truncated": false
+        },
+        {
+          "number": 14,
+          "title": "Which OAuth scopes are needed for read-only access?",
+          "state": "open",
+          "labels": [
+            "question"
+          ],
+          "comments": 1,
+          "created_at": "2026-01-01",
+          "updated_at": "2026-01-01",
+          "body_excerpt": "I only need to read items. What is the minimum set of scopes?",
+          "body_truncated": false
+        }
+      ],
+      "returned": 8,
+      "truncated": true
+    }
+  }
+}

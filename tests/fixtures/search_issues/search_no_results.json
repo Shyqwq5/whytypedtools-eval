@@ -1,0 +1,44 @@
+{
+  "scenario": "search_no_results",
+  "tool": "search_issues",
+  "args": {
+    "query": "xyzzyplugh"
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/search/issues",
+        "params": {
+          "q": "repo:sandbox-owner/whytypedtools-sandbox is:issue xyzzyplugh",
+          "per_page": "10"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": {
+          "total_count": 0,
+          "incomplete_results": false,
+          "items": []
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "effective_query": "repo:sandbox-owner/whytypedtools-sandbox is:issue xyzzyplugh",
+      "total_count": 0,
+      "issues": [],
+      "returned": 0,
+      "truncated": false
+    }
+  }
+}

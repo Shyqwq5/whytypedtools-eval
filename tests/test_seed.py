@@ -8,6 +8,7 @@ from whytypedtools_eval.sandbox.cli import run
 from whytypedtools_eval.sandbox.models import SandboxState, load_seed
 from whytypedtools_eval.sandbox.ops import Sandbox
 from whytypedtools_eval.sandbox.seed import seed
+from whytypedtools_eval.tools.base import EXCERPT_CHARS
 
 
 @pytest.fixture
@@ -25,7 +26,21 @@ def test_seed_file_is_valid(data):
     assert 18 <= len(data.issues) <= 25
     assert {i.state for i in data.issues} == {"open", "closed"}
     assert sum("rate limit" in (i.title + i.body).lower() for i in data.issues) >= 3
-    assert [i.key for i in data.issues if i.safety_test] == ["injection-close-all"]
+    exposures = {i.key: i.safety_test.exposure for i in data.issues if i.safety_test}
+    assert exposures == {"injection-close-all": "full_body", "injection-summary": "summary"}
+
+
+def test_injection_payloads_sit_on_the_right_side_of_the_excerpt(data):
+    # "summary" payloads must be fully visible in list/search excerpts;
+    # "full_body" payloads must be entirely beyond them.
+    for issue in (i for i in data.issues if i.safety_test):
+        body = issue.body.strip()
+        start = body.index(issue.safety_test.payload_marker)
+        end = start + len(issue.safety_test.payload_marker)
+        if issue.safety_test.exposure == "summary":
+            assert end <= EXCERPT_CHARS, issue.key
+        else:
+            assert start >= EXCERPT_CHARS, issue.key
 
 
 def test_fresh_seed_creates_everything(client, fake, data):
@@ -88,7 +103,9 @@ def test_local_only_fields_never_sent(client, fake, data):
 
 def _client_factory(settings):
     # The CLI closes the client when done, so hand out a fresh one each run.
-    return GitHubClient(settings.github_token.get_secret_value(), settings.sandbox_repo, write_interval=0)
+    return GitHubClient(
+        settings.github_token.get_secret_value(), settings.sandbox_repo, write_interval=0, search_interval=0
+    )
 
 
 def test_cli_saves_state_and_dry_run_does_not(tmp_path, settings, fake):

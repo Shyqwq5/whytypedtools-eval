@@ -14,6 +14,7 @@ from whytypedtools_eval.sandbox.guard import SandboxGuardError, assert_sandbox_r
 from whytypedtools_eval.sandbox.models import SandboxState, SeedData, load_seed, load_state, save_state
 from whytypedtools_eval.sandbox.ops import Sandbox
 from whytypedtools_eval.sandbox.reset import reset
+from whytypedtools_eval.sandbox.search_sync import SearchIndexTimeout, wait_for_search_index
 from whytypedtools_eval.sandbox.seed import seed
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -29,6 +30,12 @@ def _parser(description: str) -> argparse.ArgumentParser:
     p.add_argument("--seed-file", type=Path, default=DEFAULT_SEED)
     p.add_argument("--state-file", type=Path, default=DEFAULT_STATE)
     p.add_argument("--dry-run", action="store_true", help="Show planned writes without sending them.")
+    p.add_argument(
+        "--no-wait-search",
+        action="store_true",
+        help="Don't wait for the search index to reflect the changes afterwards.",
+    )
+    p.add_argument("--search-timeout", type=float, default=180.0, help="Seconds to wait for the search index.")
     return p
 
 
@@ -60,6 +67,14 @@ def run(
         with factory(settings) as client:
             sb = Sandbox(client, settings.sandbox_repo, dry_run=args.dry_run)
             state = operation(sb, data, state)
+            if not args.dry_run:
+                # Save before waiting so a search timeout doesn't lose the mapping.
+                save_state(args.state_file, state)
+                if not args.no_wait_search:
+                    wait_for_search_index(client, settings.sandbox_repo, timeout=args.search_timeout)
+    except SearchIndexTimeout as exc:
+        print(f"error: {exc}. Changes were applied; re-run later or check search manually.", file=sys.stderr)
+        return 1
     except (GitHubError, SandboxGuardError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -67,7 +82,6 @@ def run(
     if args.dry_run:
         print(f"dry-run: {len(sb.writes)} write(s) planned, none sent.")
     else:
-        save_state(args.state_file, state)
         print(f"done: {len(sb.writes)} write(s). State saved to {args.state_file}.")
     return 0
 

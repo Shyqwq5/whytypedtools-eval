@@ -23,6 +23,8 @@ class GitHubError(RuntimeError):
     def __init__(self, status: int, method: str, path: str, message: str) -> None:
         super().__init__(f"GitHub {method} {path} failed with {status}: {message}")
         self.status = status
+        # GitHub's own error text (no headers, no request data), safe to show an agent.
+        self.detail = message
 
 
 class RateLimitError(GitHubError):
@@ -45,6 +47,8 @@ class GitHubClient:
       or until `X-RateLimit-Reset`.
     - Writes are spaced at least `write_interval` seconds apart to avoid GitHub's
       secondary (content-creation) rate limit.
+    - Search requests are spaced at least `search_interval` seconds apart; the
+      search API has its own, stricter limit (30 requests/minute).
 
     Rate-limit policy: by default the client is patient (waits up to `max_wait`
     per attempt), which suits batch scripts like seed/reset. Interactive callers
@@ -60,6 +64,7 @@ class GitHubClient:
         base_url: str = DEFAULT_BASE_URL,
         max_retries: int = 5,
         write_interval: float = 1.0,
+        search_interval: float = 2.0,
         max_wait: float = 900.0,
         fail_fast_after: float | None = None,
         sleep: Callable[[float], None] = time.sleep,
@@ -70,6 +75,8 @@ class GitHubClient:
         self._base_url = base_url.rstrip("/")
         self._max_retries = max_retries
         self._write_interval = write_interval
+        self._search_interval = search_interval
+        self._last_search: float | None = None
         self._max_wait = max_wait
         self._fail_fast_after = fail_fast_after
         self._sleep = sleep
@@ -131,12 +138,13 @@ class GitHubClient:
         elif "://" in path and not path.startswith(self._base_url):
             raise SandboxGuardError(f"Refusing to follow URL outside {self._base_url}: {path}")
 
+        is_search = _is_search(path)
         for attempt in range(self._max_retries + 1):
             if is_write:
-                self._pace_writes()
+                self._last_write = self._pace(self._last_write, self._write_interval)
+            if is_search:
+                self._last_search = self._pace(self._last_search, self._search_interval)
             resp = self._http.request(method, path, **kwargs)
-            if is_write:
-                self._last_write = self._clock()
 
             wait = self._rate_limit_wait(resp)
             if wait is None:
@@ -159,12 +167,13 @@ class GitHubClient:
 
     # -- internals ----------------------------------------------------------
 
-    def _pace_writes(self) -> None:
-        if self._last_write is None or self._write_interval <= 0:
-            return
-        remaining = self._write_interval - (self._clock() - self._last_write)
-        if remaining > 0:
-            self._sleep(remaining)
+    def _pace(self, last: float | None, interval: float) -> float:
+        """Sleep until `interval` has passed since `last`; return the new timestamp."""
+        if last is not None and interval > 0:
+            remaining = interval - (self._clock() - last)
+            if remaining > 0:
+                self._sleep(remaining)
+        return self._clock()
 
     def _rate_limit_wait(self, resp: httpx.Response) -> float | None:
         """Return seconds GitHub asks us to wait if `resp` is a rate-limit response, else None.
@@ -189,6 +198,11 @@ class GitHubClient:
         return max(wait, 1.0)
 
 
+def _is_search(path: str) -> bool:
+    path = httpx.URL(path).path if "://" in path else path
+    return path.lstrip("/").startswith("search/")
+
+
 def _to_float(value: str, default: float) -> float:
     try:
         return float(value)
@@ -202,5 +216,13 @@ def _error_message(resp: httpx.Response) -> str:
     except ValueError:
         return resp.text[:200]
     if isinstance(body, dict):
-        return str(body.get("message", body))[:200]
+        message = str(body.get("message", ""))
+        details = [
+            str(e.get("message") or e.get("code"))
+            for e in body.get("errors", [])
+            if isinstance(e, dict) and (e.get("message") or e.get("code"))
+        ]
+        if details:
+            message = f"{message} ({'; '.join(details)})" if message else "; ".join(details)
+        return (message or str(body))[:300]
     return str(body)[:200]

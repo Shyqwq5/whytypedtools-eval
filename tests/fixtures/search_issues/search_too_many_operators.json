@@ -1,0 +1,47 @@
+{
+  "scenario": "search_too_many_operators",
+  "tool": "search_issues",
+  "args": {
+    "query": "a OR b OR c OR d OR e OR f OR g"
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "fake",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/search/issues",
+        "params": {
+          "q": "repo:sandbox-owner/whytypedtools-sandbox is:issue a OR b OR c OR d OR e OR f OR g",
+          "per_page": "10"
+        }
+      },
+      "response": {
+        "status": 422,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "json": {
+          "message": "Validation Failed",
+          "errors": [
+            {
+              "message": "The search contains more than five AND / OR / NOT operators.",
+              "code": "invalid"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": false,
+    "error": {
+      "type": "validation_failed",
+      "message": "GitHub rejected the request as invalid: Validation Failed (The search contains more than five AND / OR / NOT operators.). Adjust the arguments and try again.",
+      "retryable": false,
+      "retry_after_seconds": null
+    }
+  }
+}

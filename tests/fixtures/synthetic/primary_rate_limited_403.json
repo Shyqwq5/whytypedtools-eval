@@ -1,0 +1,37 @@
+{
+  "scenario": "primary_rate_limited_403",
+  "tool": "list_issues",
+  "args": {},
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "source": "synthetic",
+  "note": "Hand-written: this failure cannot be triggered reliably against the real API.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues",
+        "params": {
+          "per_page": "50",
+          "state": "open",
+          "sort": "created",
+          "direction": "desc"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": "4102444800",
+          "x-ratelimit-resource": "core"
+        },
+        "json": {
+          "message": "API rate limit exceeded for user."
+        }
+      }
+    }
+  ]
+}
