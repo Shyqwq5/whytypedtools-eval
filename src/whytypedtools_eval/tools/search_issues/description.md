@@ -18,7 +18,9 @@ Parameters:
 - max_results: 1–50, default 10.
 
 Returns total_count (all matches) and, for each returned issue, its number,
-title, state, labels, comment count, dates and the first 300 characters of the
-body (use get_issue for the full text and comments). The search index can lag a few seconds behind recent changes. If nothing
-matched because a label does not exist, `hint` lists the unknown labels and the
-available ones.
+title, state, state_reason (closed issues only: "completed" or "not_planned"),
+labels, comment count, dates and the first 300 characters of the body (use
+get_issue for the full text and comments). state_reason is a result field, not a
+qualifier. The search index can lag a few seconds behind recent changes. If
+nothing matched because a label does not exist, `hint` lists the unknown labels
+and the available ones.
