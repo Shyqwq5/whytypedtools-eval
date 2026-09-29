@@ -33,8 +33,8 @@ against generic bash tools (with rule-based and LLM guardrails).
 
 ## Roadmap (do steps in order; only work on the step you are asked for)
 1. Sandbox repo + seed data + credential handling.  (done)
-2. First 1–2 tools with integration tests (recorded API responses as fixtures).  <- current
-3. Minimal agent; wire the full loop end-to-end.
+2. First 1–2 tools with integration tests (recorded API responses as fixtures).  (done)
+3. Minimal agent; wire the full loop end-to-end.  <- next (see "Status / handoff")
 4. Expand to 5–6 tools incl. confusable ones; expose as MCP server.
 5. Eval sets (functional + safety) with per-run logs of every tool call.
 6. First eval round, multiple runs per task.
@@ -62,6 +62,7 @@ against generic bash tools (with rule-based and LLM guardrails).
 ## Safety rules
 - Never read, print, log or commit tokens. Secrets live only in `.env` (gitignored).
   Do not open `.env`; use `.env.example` to learn the variable names.
+  This includes `COHERE_API_KEY` (step 3): never read, print or log it.
 - Scripts that write to GitHub must refuse to run unless the target equals `SANDBOX_REPO`.
 - Every write script supports `--dry-run`.
 - Unit tests must never call the real GitHub API; mock HTTP instead.
@@ -109,3 +110,63 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Cross-tool and safety evals live in `evals/`. CI compares metrics to
   `evals/baseline.json` and fails on regressions > threshold.
 - Run tests: `uv run pytest`.
+
+## Status / handoff (updated 2026-09-30, end of step 2)
+
+### Where things stand
+- Steps 1 and 2 are done. `uv run pytest`: 204 passed, all on fixtures recorded
+  from the real sandbox (22 recorded + 4 synthetic error fixtures).
+- Git: branch `main`, **no remote configured; nothing has been pushed yet**.
+  Before the first push run `git ls-files | grep -E '\.env$|state\.json'` (must be empty).
+- The local folder is still named `tool_eval`; the user plans to rename it to
+  `whytypedtools-eval` (close Claude Code first, then `uv sync` to rebuild `.venv`).
+
+### Key decisions in step 2 (and why)
+- Tools are protocol-independent (`tools/registry.py`: `list_tools`/`call_tool`) so
+  the MCP server in step 4 is a thin wrapper, and evals can call tools directly.
+- `description.md` is a separate file per tool because it is the object we tune in
+  step 7 and compare across versions. Drafts include cross-references between
+  `list_issues` and `search_issues`, as a normal engineer would write them (not a
+  deliberately weak baseline).
+- State defaults differ on purpose (list: `open`, search: `all`) and are visible in
+  the schemas; this is a candidate confusion point to measure, not to pre-fix.
+- Label hints only when a result is empty AND labels were given (labels fetched once
+  per context), so normal calls cost no extra request.
+- Rate limits: seed/reset keep the patient client; tools use `fail_fast_after=5s`
+  and return `rate_limited` with `retry_after_seconds` so an agent never blocks.
+  Decoding/parse failures are `invalid_response` and not retryable.
+- Search scope is enforced three ways: tool-built `repo:… is:issue` prefix,
+  allow-listed qualifiers only, and post-filtering by `repository_url`.
+- Two injection issues: `injection-close-all` (payload past the 300-char excerpt,
+  `exposure: full_body`) and `injection-summary` (payload inside the excerpt,
+  `exposure: summary`), to measure whether truncation reduces exposure. The first
+  one's lead-in sentence does appear in excerpts; kept as is by decision.
+- Fixture recording is all-or-nothing: every scenario declares `expect`; any
+  mismatch or failed secret/identifier scan (plain and URL-decoded) writes nothing.
+
+### Known issues / unverified assumptions
+- `sort=comments` on the issues list returned an order inconsistent with the real
+  comment counts (#1 with 2 comments ranked after three 1-comment issues), twice on
+  the same day. Cause unconfirmed (suspected stale sort key after reset re-created
+  comments). `test_sort_by_comments` is marked KNOWN WEAK. See README "Findings".
+- Search index lag after real writes is unmeasured: every real seed/reset/record run
+  so far made zero writes, so `wait_for_search_index` always passed on first check.
+  The `updated_at` equality between search and REST has been confirmed.
+- Search `best_match` order is not emulated by the fake; tests must not rely on it.
+
+### Pending items
+1. Experiment (b): after time has passed, re-record only `list_most_commented`
+   (`uv run python scripts/record_fixtures.py --only list_most_commented`, read-only,
+   Claude may run it). If the order now matches comment counts, make
+   `test_sort_by_comments` a strict top-N check. If it is still wrong, propose
+   removing `sort=comments` from the `list_issues` schema (ask before changing).
+   Either way, comment-count ordering stays out of eval gold answers.
+2. Search index delay: on the next reset that actually changes something (user runs
+   it), count the "search index stale … retrying" lines and record the result in
+   README "Findings".
+3. Step 3 — thin test agent using Cohere Command with tool use, calling tools via
+   `tools.registry` (no MCP yet). The user will put `COHERE_API_KEY` in `.env`;
+   never read or print it. Add it to `.env.example` and `config.py` (as `SecretStr`)
+   when starting. Per-run logs of every tool call (name, args, result) are needed
+   later for failure analysis, so design the agent loop with that in mind.
+4. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
