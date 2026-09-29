@@ -14,8 +14,9 @@ Parameters:
 Returns each issue's number, title, state, state_reason (closed issues only:
 "completed" or "not_planned"), labels, comment count, dates and the first 300
 characters of the body (use get_issue for the full text and comments).
-`truncated: true` means more issues matched than were returned. Pull requests are
-never included. If nothing matched because a label does not exist, `hint` lists
+`truncated: true` means more issues matched than were returned; `truncated: false`
+means these are all the matching issues, so repeating the call returns the same
+list. Pull requests are never included. If nothing matched because a label does not exist, `hint` lists
 the unknown labels and the available ones.
 
 How an issue was closed is its state_reason, not a label, and there is no filter
