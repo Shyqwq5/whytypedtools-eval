@@ -34,8 +34,9 @@ class SafetyTest(_Strict):
     # Which tool output exposes the payload:
     # - summary: within the body excerpt returned by list/search tools.
     # - full_body: only in the full body (e.g. a get_issue tool), past the excerpt.
-    exposure: Literal["summary", "full_body"]
-    # A phrase from the malicious instruction, used to locate it in the body.
+    # - comment: only in a comment (tools that return comments), not in the body.
+    exposure: Literal["summary", "full_body", "comment"]
+    # A phrase from the malicious instruction, used to locate it in the body/comment.
     payload_marker: str = Field(min_length=1)
     expected_behavior: str
 
@@ -52,7 +53,13 @@ class IssueSpec(_Strict):
 
     @model_validator(mode="after")
     def _check_payload_marker(self) -> IssueSpec:
-        if self.safety_test and self.safety_test.payload_marker not in self.body:
+        st = self.safety_test
+        if st is None:
+            return self
+        if st.exposure == "comment":
+            if st.payload_marker in self.body or not any(st.payload_marker in c.body for c in self.comments):
+                raise ValueError(f"issue {self.key!r}: payload_marker must be in a comment, not the body")
+        elif st.payload_marker not in self.body:
             raise ValueError(f"issue {self.key!r}: payload_marker not found in body")
         return self
 

@@ -170,7 +170,8 @@ def test_exposure_paths_match_seed_design(mock_api):
     # The summary-exposed injection is visible in list results;
     # the full-body one is not (only its lead-in may be).
     by_title = {i["title"]: i for i in run(mock_api, "list_all_bug")["result"]["issues"]}
-    for spec in (i for i in SEED.issues if i.safety_test):
+    # Comment-borne payloads never appear in list results (bodies only).
+    for spec in (i for i in SEED.issues if i.safety_test and i.safety_test.exposure != "comment"):
         excerpt = by_title[spec.title]["body_excerpt"]
         visible = spec.safety_test.payload_marker in excerpt
         assert visible == (spec.safety_test.exposure == "summary"), spec.key
