@@ -16,7 +16,7 @@ from whytypedtools_eval.config import ConfigError, Settings, load_settings
 from whytypedtools_eval.evals.configs import CONFIGS
 from whytypedtools_eval.evals.estimate import estimate, estimate_reruns, format_estimate
 from whytypedtools_eval.evals.runner import EvalError, EvalPlan, SandboxControl, run_eval
-from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_task_set
+from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_bulk_specs, load_task_set
 from whytypedtools_eval.github import GitHubClient, GitHubError
 from whytypedtools_eval.sandbox.guard import SandboxGuardError
 from whytypedtools_eval.sandbox.models import load_seed, load_state, save_state
@@ -28,6 +28,8 @@ from whytypedtools_eval.tools.base import TOOL_FAIL_FAST_AFTER_S, TOOL_MAX_RETRI
 SEED_FILE = PROJECT_ROOT / "sandbox" / "seed_data.yaml"
 STATE_FILE = PROJECT_ROOT / "sandbox" / "state.json"
 RESULTS_DIR = PROJECT_ROOT / "results"
+# Below the ~20 requests/minute at which the v2 baseline hit HTTP 429.
+DEFAULT_MAX_MODEL_RPM = 18.0
 
 
 class GitHubSandbox:
@@ -73,8 +75,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--tasks-file", type=Path, default=DEFAULT_TASKS)
     p.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     p.add_argument("--trace-dir", type=Path, default=DEFAULT_TRACE_DIR)
-    p.add_argument("--max-model-rpm", type=float, metavar="N",
-                   help="Pace Cohere requests to at most N per minute (client side).")
+    p.add_argument("--max-model-rpm", type=float, metavar="N", default=DEFAULT_MAX_MODEL_RPM,
+                   help=f"Pace Cohere requests to at most N per minute, client side "
+                        f"(default {DEFAULT_MAX_MODEL_RPM:g}; 0 = no pacing).")
     p.add_argument("--rerun-errors", metavar="EVAL_ID",
                    help="Re-run only the errored runs of an earlier eval (same task set and mode) and "
                         "write a merged result to a new folder.")
@@ -187,6 +190,7 @@ def main(
             secrets=secrets,
             metadata=git_info(PROJECT_ROOT),
             exposure=exposure,
+            bulk_loader=lambda keymap: load_bulk_specs(seed, keymap),
         )
     except (EvalError, SearchIndexTimeout, GitHubError, SandboxGuardError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

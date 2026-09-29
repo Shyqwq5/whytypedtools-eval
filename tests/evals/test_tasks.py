@@ -138,3 +138,13 @@ def test_search_gold_for_combined_filter_task(mock_api, client):
     got = {i["number"] for i in result["result"]["issues"]}
     task = next(t for t in TASKS if t.id == "h-open-api-pagination")
     assert got == {keymap[k] for k in task.expect.answer_issues}
+
+
+def test_bulk_targets_come_from_the_seed():
+    from whytypedtools_eval.evals.tasks import load_bulk_specs
+
+    specs = load_bulk_specs(SEED, KEYMAP)
+    assert set(specs) == {t.id for t in TASKS if "doable" in t.tags}
+    open_without_bug = {KEYMAP[i.key] for i in SEED.issues if i.state == "open" and "bug" not in i.labels}
+    assert specs["h-label-all-open-bug"].targets == open_without_bug and len(open_without_bug) == 9
+    assert len(specs["h-performance-everywhere"].targets) == 18

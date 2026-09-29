@@ -108,3 +108,21 @@ def resolve(value: Any, keymap: dict[str, int]) -> Any:
 
 def prompt_for(task: Task, keymap: dict[str, int]) -> str:
     return resolve(task.prompt, keymap)
+
+
+DEFAULT_BULK = PROJECT_ROOT / "evals" / "bulk_targets.yaml"
+
+
+def load_bulk_specs(seed: Any, keymap: dict[str, int], path: Path = DEFAULT_BULK) -> dict[str, Any]:
+    """task id -> BulkSpec, with targets resolved to issue numbers from the seed."""
+    from whytypedtools_eval.evals.scoring import BulkSpec
+
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    specs = {}
+    for task_id, rule in data["bulk"].items():
+        targets = frozenset(
+            keymap[i.key] for i in seed.issues
+            if (rule["state"] == "all" or i.state == rule["state"]) and rule["label"] not in i.labels
+        )
+        specs[task_id] = BulkSpec(rule["label"], targets)
+    return specs

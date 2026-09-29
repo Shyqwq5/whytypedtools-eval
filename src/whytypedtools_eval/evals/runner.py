@@ -23,9 +23,10 @@ from typing import Any, Protocol
 from whytypedtools_eval.agent.loop import DEFAULT_MAX_TOOL_CALLS, SystemPrompt, run_agent
 from whytypedtools_eval.agent.model import ChatModel
 from whytypedtools_eval.agent.trace import REDACTED, new_run_id, read_trace, sha256_json, sha256_text, utc_now
-from whytypedtools_eval.evals.configs import CONFIGS
+from whytypedtools_eval.evals.configs import CONFIGS, TYPED
+from whytypedtools_eval.evals.effects import Effect
 from whytypedtools_eval.evals.report import aggregate, to_markdown
-from whytypedtools_eval.evals.scoring import score_run
+from whytypedtools_eval.evals.scoring import BulkSpec, score_run
 from whytypedtools_eval.evals.tasks import Task, prompt_for
 from whytypedtools_eval.github import GitHubClient
 from whytypedtools_eval.tools.base import WriteMode
@@ -97,6 +98,7 @@ def run_eval(
     secrets: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     exposure: dict[str, str] | None = None,
+    bulk_loader: Callable[[dict[str, int]], dict[str, BulkSpec]] | None = None,
     emit: Callable[[str], None] = print,
 ) -> Path:
     """Run the plan and return the results directory for this eval."""
@@ -127,12 +129,19 @@ def run_eval(
     eval_id = new_run_id(started)
     out = results_dir / eval_id
     out.mkdir(parents=True, exist_ok=False)
-    records: list[dict[str, Any]] = list(plan.base_records)
+    # Bulk targets are issue numbers, so they are resolved once the keymap is known.
+    bulk_specs = bulk_loader(keymap) if bulk_loader else {}
+    tasks_by_id = {t.id: t for t in plan.tasks}
+    # Re-score the parent's records with the current scoring, from their traces,
+    # so the merged result is scored consistently.
+    records = [
+        _rescore(r, tasks_by_id[r["task_id"]], trace_dir, plan, keymap, bulk_specs) for r in plan.base_records
+    ]
     total = len(plan.only) if plan.only is not None else plan.runs * len(plan.tasks) * len(plan.configs)
     done = 0
 
     with (out / "runs.jsonl").open("x", encoding="utf-8", newline="\n") as runs_file:
-        for record in plan.base_records:
+        for record in records:
             runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
         for run_index in range(plan.runs):
             for task in plan.tasks:
@@ -168,6 +177,7 @@ def run_eval(
                         keymap=keymap,
                         write_mode=plan.write_mode,
                         typed=setup.typed,
+                        bulk=bulk_specs.get(task.id),
                     )
                     record.update(config=config, run_index=run_index, run_id=result.run_id,
                                   trace=result.trace_path.name, drift=None,
@@ -224,3 +234,25 @@ def run_eval(
     (out / "summary.md").write_text(clean(to_markdown(summary, meta)), encoding="utf-8", newline="\n")
     emit(f"results: {out}")
     return out
+
+
+_CARRIED = ("config", "run_index", "run_id", "trace", "drift", "github_requests", "sandbox_requests", "rerun_of")
+
+
+def _rescore(record: dict[str, Any], task: Task, trace_dir: Path, plan: EvalPlan,
+             keymap: dict[str, int], bulk_specs: dict[str, BulkSpec]) -> dict[str, Any]:
+    path = next((trace_dir / (plan.parent_eval or "")).rglob(record["trace"]), None)
+    if path is None:
+        raise EvalError(f"trace {record['trace']} of the parent eval is missing; cannot re-score it")
+    fresh = score_run(
+        task,
+        events=read_trace(path),
+        write_log=[],
+        effects=[Effect(**e) for e in record["effects"]],
+        keymap=keymap,
+        write_mode=plan.write_mode,
+        typed=record["config"] in TYPED,
+        bulk=bulk_specs.get(task.id),
+    )
+    fresh.update({k: record.get(k) for k in _CARRIED})
+    return fresh

@@ -40,3 +40,5 @@ def typed_tools(client: GitHubClient, repo: str, write_mode: WriteMode, task: st
 SetupFactory = Callable[[GitHubClient, str, WriteMode, str], ToolSetup]
 
 CONFIGS: dict[str, SetupFactory] = {"tool_e": typed_tools}
+# Configurations whose tool choice and arguments can be checked against a task.
+TYPED: frozenset[str] = frozenset({"tool_e"})
