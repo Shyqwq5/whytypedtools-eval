@@ -63,6 +63,10 @@ against generic bash tools (with rule-based and LLM guardrails).
 - Scripts that write to GitHub must refuse to run unless the target equals `SANDBOX_REPO`.
 - Every write script supports `--dry-run`.
 - Unit tests must never call the real GitHub API; mock HTTP instead.
+- Running things against the real sandbox:
+  - Read-only commands (e.g. `scripts/record_fixtures.py`) Claude may run itself.
+  - Anything that writes to GitHub (`seed_sandbox.py`, `reset_sandbox.py`, even
+    though they are guarded) is run by the user, never by Claude.
 - Never call endpoints that delete a repository, anywhere in the codebase.
 - The token should be a fine-grained PAT scoped to the sandbox repo only
   (Issues: read/write, Metadata: read).
