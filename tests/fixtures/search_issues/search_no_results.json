@@ -7,6 +7,7 @@
   "page_size": 50,
   "auth": "valid",
   "repo_suffix": "",
+  "expect": "ok",
   "source": "fake",
   "exchanges": [
     {

@@ -57,6 +57,9 @@ class Scenario:
     page_size: int = 50
     auth: Literal["valid", "invalid"] = "valid"
     repo_suffix: str = ""
+    # "ok" or the expected error type. A recording whose outcome differs is
+    # rejected, so a broken run can never produce plausible-looking fixtures.
+    expect: str = "ok"
 
 
 SCENARIOS: list[Scenario] = [
@@ -71,8 +74,8 @@ SCENARIOS: list[Scenario] = [
     Scenario("list_paginated", "list_issues", {"state": "all", "max_results": 8}, page_size=3),
     Scenario("list_empty_known_labels", "list_issues", {"labels": ["performance", "question"]}),
     Scenario("list_unknown_label", "list_issues", {"labels": ["bugs"]}),
-    Scenario("list_auth_failed", "list_issues", auth="invalid"),
-    Scenario("list_not_found", "list_issues", repo_suffix=NOT_FOUND_SUFFIX),
+    Scenario("list_auth_failed", "list_issues", auth="invalid", expect="auth_failed"),
+    Scenario("list_not_found", "list_issues", repo_suffix=NOT_FOUND_SUFFIX, expect="not_found"),
     # search_issues
     Scenario("search_rate_limit", "search_issues", {"query": "rate limit"}),
     Scenario("search_rate_limit_open", "search_issues", {"query": "rate limit", "state": "open"}),
@@ -84,9 +87,11 @@ SCENARIOS: list[Scenario] = [
              {"query": "timeout OR export OR limit", "max_results": 5}, page_size=2),
     Scenario("search_no_results", "search_issues", {"query": "xyzzyplugh"}),
     Scenario("search_unknown_label", "search_issues", {"query": "timeout", "labels": ["perf"]}),
-    Scenario("search_too_many_operators", "search_issues", {"query": "a OR b OR c OR d OR e OR f OR g"}),
+    Scenario("search_too_many_operators", "search_issues", {"query": "a OR b OR c OR d OR e OR f OR g"},
+             expect="validation_failed"),
     Scenario("search_webhook_timeout", "search_issues", {"query": "webhook timeout"}),
-    Scenario("search_auth_failed", "search_issues", {"query": "rate limit"}, auth="invalid"),
+    Scenario("search_auth_failed", "search_issues", {"query": "rate limit"}, auth="invalid",
+             expect="auth_failed"),
 ]
 
 
@@ -95,6 +100,23 @@ SCENARIOS: list[Scenario] = [
 
 class UnsafeFixtureError(RuntimeError):
     """Raised when a fixture still contains something that must not be committed."""
+
+
+class UnexpectedOutcomeError(RuntimeError):
+    """Raised when a scenario's result doesn't match its declared expectation."""
+
+
+def outcome(result: dict[str, Any]) -> str:
+    return "ok" if result.get("ok") else result["error"]["type"]
+
+
+def check_outcome(scenario: Scenario, result: dict[str, Any]) -> None:
+    actual = outcome(result)
+    if actual != scenario.expect:
+        detail = "" if actual == "ok" else f": {result['error']['message']}"
+        raise UnexpectedOutcomeError(
+            f"scenario {scenario.name!r} expected {scenario.expect!r} but got {actual!r}{detail}"
+        )
 
 
 def _scrub_issue(item: dict[str, Any]) -> dict[str, Any]:
@@ -211,6 +233,7 @@ def record_scenario(
     with GitHubClient(use_token, real_repo, **kwargs) as client:
         ctx = ToolContext(client, repo, page_size=scenario.page_size)
         result = call_tool(ctx, scenario.tool, scenario.args)
+    check_outcome(scenario, result)
     fixture = {
         "scenario": scenario.name,
         "tool": scenario.tool,
@@ -218,6 +241,7 @@ def record_scenario(
         "page_size": scenario.page_size,
         "auth": scenario.auth,
         "repo_suffix": scenario.repo_suffix,
+        "expect": scenario.expect,
         "source": source,
         "exchanges": transport.exchanges,
         "result": result,

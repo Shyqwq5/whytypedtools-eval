@@ -5,6 +5,7 @@
   "page_size": 50,
   "auth": "invalid",
   "repo_suffix": "",
+  "expect": "auth_failed",
   "source": "fake",
   "exchanges": [
     {

@@ -5,6 +5,7 @@
   "page_size": 50,
   "auth": "valid",
   "repo_suffix": "-does-not-exist",
+  "expect": "not_found",
   "source": "fake",
   "exchanges": [
     {

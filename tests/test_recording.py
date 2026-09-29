@@ -96,3 +96,66 @@ def test_recording_transport_handles_compressed_responses():
     assert len(rec.exchanges) == 1
     assert rec.exchanges[0]["response"]["json"] == items
     assert "content-encoding" not in rec.exchanges[0]["response"]["headers"]
+
+
+# -- declared outcomes ---------------------------------------------------------
+
+
+def _load_recorder_script():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "record_fixtures.py"
+    spec = importlib.util.spec_from_file_location("record_fixtures", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_unexpected_error_outcome_is_rejected():
+    from tests.recording import Scenario, UnexpectedOutcomeError, record_scenario
+
+    def handler(request):
+        return httpx.Response(500, json={"message": "Server Error"})
+
+    with pytest.raises(UnexpectedOutcomeError, match="expected 'ok' but got 'upstream_error'"):
+        record_scenario(Scenario("x", "list_issues"), token="github_pat_fixture", real_repo=REAL,
+                        source="recorded", inner=httpx.MockTransport(handler))
+
+
+def test_unexpected_success_is_rejected():
+    from tests.recording import Scenario, UnexpectedOutcomeError, record_scenario
+
+    def handler(request):
+        return httpx.Response(200, json=[])
+
+    with pytest.raises(UnexpectedOutcomeError, match="expected 'auth_failed' but got 'ok'"):
+        record_scenario(Scenario("x", "list_issues", auth="invalid", expect="auth_failed"),
+                        token="github_pat_fixture", real_repo=REAL, source="recorded",
+                        inner=httpx.MockTransport(handler))
+
+
+def test_one_bad_scenario_means_nothing_is_written(tmp_path, monkeypatch, capsys):
+    import tests.recording as recording
+    from tests.recording import SCENARIOS
+
+    monkeypatch.setattr(recording, "FIXTURES_DIR", tmp_path)
+    script = _load_recorder_script()
+    good = SCENARIOS[0]
+    bad = recording.Scenario("bad", "list_issues", expect="not_found")  # will actually succeed
+    with pytest.raises(SystemExit) as exc:
+        script.record_fake([good, bad])
+    assert "expected 'not_found' but got 'ok'" in str(exc.value)
+    assert "No fixtures were written" in str(exc.value)
+    assert list(tmp_path.rglob("*.json")) == []
+
+
+def test_committed_fixtures_match_their_declared_outcome():
+    from tests.recording import SCENARIOS, all_fixtures, outcome
+
+    declared = {s.name: s.expect for s in SCENARIOS}
+    for fixture in all_fixtures():
+        if fixture["source"] == "synthetic":
+            continue
+        assert fixture["expect"] == declared[fixture["scenario"]], fixture["scenario"]
+        assert outcome(fixture["result"]) == fixture["expect"], fixture["scenario"]

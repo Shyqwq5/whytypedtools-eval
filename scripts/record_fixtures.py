@@ -5,8 +5,10 @@
     uv run python scripts/record_fixtures.py --only search_rate_limit list_default
 
 Real recording refuses to run unless the sandbox is exactly in the seed state
-(a dry-run reset plans zero writes) and the search index is up to date. Every
-fixture is sanitised and scanned for secrets before it is written.
+(a dry-run reset plans zero writes) and the search index is up to date.
+
+All selected scenarios are recorded in memory first. Each must match its declared
+outcome (`expect`) and pass the secret scan; if any fails, nothing is written.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from tests.recording import (  # noqa: E402
     FIXTURE_TOKEN,
     SCENARIOS,
     Scenario,
+    UnexpectedOutcomeError,
     UnsafeFixtureError,
     assert_safe,
     record_scenario,
@@ -51,16 +54,30 @@ def _selected(only: list[str] | None) -> list[Scenario]:
     return [s for s in SCENARIOS if s.name in only]
 
 
+def write_all(fixtures: list[dict]) -> None:
+    for fixture in fixtures:
+        print(f"wrote {write_fixture(fixture).relative_to(ROOT)}")
+
+
+def fail(message: str) -> None:
+    sys.exit(f"error: {message}\nNo fixtures were written.")
+
+
 def record_fake(scenarios: list[Scenario]) -> None:
     fake = FakeGitHub(FIXTURE_REPO)
     fake.load_seed(load_seed(SEED_FILE))
+    fixtures = []
     with respx.mock(base_url=API, assert_all_called=False) as router:
         router.route().mock(side_effect=fake.handler)
         for scenario in scenarios:
-            fixture = record_scenario(scenario, token=FIXTURE_TOKEN, real_repo=FIXTURE_REPO,
-                                      source="fake", sleep=lambda _: None)
-            assert_safe(fixture, [], FIXTURE_REPO.split("/")[0])
-            print(f"wrote {write_fixture(fixture).relative_to(ROOT)}")
+            try:
+                fixture = record_scenario(scenario, token=FIXTURE_TOKEN, real_repo=FIXTURE_REPO,
+                                          source="fake", sleep=lambda _: None)
+                assert_safe(fixture, [], FIXTURE_REPO.split("/")[0])
+            except (UnexpectedOutcomeError, UnsafeFixtureError) as exc:
+                fail(str(exc))
+            fixtures.append(fixture)
+    write_all(fixtures)
 
 
 def check_sandbox_ready(token: str, repo: str) -> None:
@@ -87,14 +104,16 @@ def record_real(scenarios: list[Scenario]) -> None:
     except SearchIndexTimeout as exc:
         sys.exit(f"error: {exc}")
 
+    fixtures = []
     for scenario in scenarios:
-        fixture = record_scenario(scenario, token=token, real_repo=repo, source="recorded")
         try:
+            fixture = record_scenario(scenario, token=token, real_repo=repo, source="recorded")
+            # The scan message never includes fixture content.
             assert_safe(fixture, [token], repo.split("/")[0])
-        except UnsafeFixtureError as exc:
-            # Do not write it, and do not print its content.
-            sys.exit(f"error: refusing to write {scenario.name}: {exc}")
-        print(f"wrote {write_fixture(fixture).relative_to(ROOT)}")
+        except (UnexpectedOutcomeError, UnsafeFixtureError) as exc:
+            fail(str(exc))
+        fixtures.append(fixture)
+    write_all(fixtures)
 
 
 def main() -> None:

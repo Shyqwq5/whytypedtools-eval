@@ -8,6 +8,7 @@
   "page_size": 2,
   "auth": "valid",
   "repo_suffix": "",
+  "expect": "ok",
   "source": "fake",
   "exchanges": [
     {
