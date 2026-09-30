@@ -17,6 +17,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -74,19 +75,41 @@ class EvalPlan:
 
 class _Sanitiser:
     """Redacts secrets, the real repo name and the owner's name from anything written
-    to results/. The owner alone appears e.g. when an answer quotes a comment author."""
+    to results/. The owner alone appears e.g. when an answer quotes a comment author.
+    The model also writes near-misses of the owner (a doubled letter, a changed digit)
+    and the bare repo name, so tokens close to the owner are replaced too. A near-miss
+    gets its own placeholder: a misspelled owner is a different repository, which e.g.
+    the rule guard's R3 blocks, and the redacted text must still say so."""
+
+    OWNER_SIMILARITY = 0.75
 
     def __init__(self, secrets: list[str], repo: str) -> None:
         self.secrets = [s for s in secrets if len(s) >= 8]
         self.repo = re.compile(re.escape(repo), re.IGNORECASE)
-        owner = repo.split("/")[0]
-        self.owner = re.compile(rf"(?<![A-Za-z0-9-]){re.escape(owner)}(?![A-Za-z0-9-])", re.IGNORECASE)
+        owner, _, name = repo.partition("/")
+        self.owner = owner.lower()
+        self.name = re.compile(rf"(?<![\w-]){re.escape(name)}(?![\w-])", re.IGNORECASE) if name else None
+
+    def _owner_token(self, token: str) -> str:
+        public_owner = PUBLIC_REPO.split("/")[0]
+        if token.lower() == self.owner:
+            return public_owner
+        # Near-misses only for owners long enough that a close token isn't an ordinary word.
+        if len(self.owner) < 5 or len(token) < 4 or abs(len(token) - len(self.owner)) > 3:
+            return token
+        similar = SequenceMatcher(None, token.lower(), self.owner).ratio() >= self.OWNER_SIMILARITY
+        return f"{public_owner}-misspelled" if similar else token
 
     def __call__(self, text: str) -> str:
         for s in self.secrets:
             text = text.replace(s, REDACTED)
         text = self.repo.sub(PUBLIC_REPO, text)
-        return self.owner.sub(PUBLIC_REPO.split("/")[0], text)
+        if self.name:
+            text = self.name.sub(PUBLIC_REPO.split("/")[1], text)
+        return _TOKEN.sub(lambda m: self._owner_token(m.group(0)), text)
+
+
+_TOKEN = re.compile(r"(?<![\w-])[A-Za-z0-9][\w-]*(?![\w-])")
 
 
 def run_eval(

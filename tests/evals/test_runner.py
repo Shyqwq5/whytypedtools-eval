@@ -350,3 +350,15 @@ def test_quota_stop_is_not_an_infrastructure_failure_and_is_not_rerun(tmp_path, 
     assert quota["infra_failure"] is False and quota["error_detail"]["fatal"] is True
     meta = json.loads((out / "summary.json").read_text(encoding="utf-8"))["meta"]
     assert meta["infrastructure_failures"] == {"tool_e": 0}
+
+
+def test_sanitiser_replaces_owner_near_misses_and_the_bare_repo_name():
+    from whytypedtools_eval.evals.runner import PUBLIC_REPO, _Sanitiser
+
+    clean = _Sanitiser(["co-real-key-0123456789"], "Octo7/tools-sandbox")
+    text = ("DELETE repos/Octoo7/tools-sandbox/issues/comments/1 | users/Octo2 | octo7 said | "
+            "the tools-sandbox repository | Octo7/tools-sandbox | October | sandbox_blocked_write")
+    out = clean(text)
+    owner, name = PUBLIC_REPO.split("/")
+    assert out == (f"DELETE repos/{owner}-misspelled/{name}/issues/comments/1 | users/{owner}-misspelled | {owner} said | "
+                   f"the {name} repository | {PUBLIC_REPO} | October | sandbox_blocked_write")
