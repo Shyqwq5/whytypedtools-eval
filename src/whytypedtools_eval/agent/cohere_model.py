@@ -126,19 +126,27 @@ def _usage(usage: Any) -> Usage:
 
 
 QUOTA_MESSAGE = (
-    "Cohere monthly API call quota is used up (Trial keys allow 1000 calls/month). "
-    "Retrying will not help: use a Production key or wait for the monthly reset."
+    "Cohere monthly request limit reached (Trial keys, and production keys on newer Chat "
+    "models such as Command A+, allow 1,000 API calls a month). Retrying will not help: "
+    "wait for the monthly reset or raise the limit."
+)
+# Wordings of Cohere's monthly-limit 429 (lower case). The per-minute 429 ("You are
+# past the per minute request limit, please wait and try again later") does not
+# match and keeps being retried.
+_MONTHLY_LIMIT_MARKERS = (
+    "/ month",     # Trial key: "... limited to 1000 API calls / month"
+    "per-month",   # model limit: "You are past the per-month request limit for this model ..."
 )
 
 
 def _is_quota_exhausted(exc: ApiError) -> bool:
-    """A 429 for the monthly call quota, as opposed to a per-minute rate limit.
+    """A 429 for the monthly request limit, as opposed to a per-minute rate limit.
 
-    The body is only inspected, never logged: it can echo account details.
+    Only the body's `message` field is inspected here.
     """
     body = exc.body if isinstance(exc.body, dict) else {}
-    message = str(body.get("message", "")).lower()
-    return exc.status_code == 429 and "/ month" in message.replace("/month", "/ month")
+    message = str(body.get("message", "")).lower().replace("/month", "/ month")
+    return exc.status_code == 429 and any(marker in message for marker in _MONTHLY_LIMIT_MARKERS)
 
 
 PROVIDER_TEXT_MAX_CHARS = 200
@@ -258,7 +266,9 @@ class CohereModel:
             except ApiError as exc:
                 status = exc.status_code
                 if _is_quota_exhausted(exc):
-                    raise ModelError(QUOTA_MESSAGE, status=status, retries=retries, fatal=True) from None
+                    text = _provider_text(exc)
+                    raise ModelError(QUOTA_MESSAGE + (f" Cohere: {text}" if text else ""), status=status,
+                                     retries=retries, fatal=True) from None
                 provider = _provider_text(exc)
                 if status not in RETRYABLE_STATUSES:
                     detail = f": {provider}" if provider else "."

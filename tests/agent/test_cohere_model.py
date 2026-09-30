@@ -286,8 +286,29 @@ def test_monthly_quota_429_fails_fast():
     with pytest.raises(ModelError) as exc:
         model.step(MESSAGES, [])
     assert exc.value.fatal is True and exc.value.status == 429
-    assert "monthly API call quota" in exc.value.message and "Trial key, which" not in exc.value.message
+    assert exc.value.message.startswith("Cohere monthly request limit reached")
+    assert "Cohere: You are using a Trial key" in exc.value.message
     assert sleeps == [] and len(client.requests) == 1
+
+
+def test_per_month_model_limit_429_is_a_quota_stop():
+    body = {"message": "You are past the per-month request limit for this model, please wait and try again later."}
+    client = FakeClient(ApiError(status_code=429, body=body), text_response())
+    model, sleeps = make(client)
+    with pytest.raises(ModelError) as exc:
+        model.step(MESSAGES, [])
+    assert exc.value.fatal is True and exc.value.retries == []
+    assert "per-month request limit for this model" in exc.value.message
+    assert sleeps == [] and len(client.requests) == 1  # no retries
+
+
+def test_per_minute_limit_429_keeps_retrying():
+    body = {"message": "You are past the per minute request limit, please wait and try again later"}
+    client = FakeClient(ApiError(status_code=429, body=body), ApiError(status_code=429, body=body), text_response())
+    model, sleeps = make(client)
+    turn = model.step(MESSAGES, [])
+    assert turn.text == "Answer." and len(sleeps) == 2
+    assert [r.reason for r in turn.retries] == ["http_429", "http_429"]
 
 
 def test_per_minute_429_is_still_retried():

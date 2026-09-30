@@ -311,3 +311,23 @@ def test_results_hide_the_owner_name_on_its_own(tmp_path, client, seeded):
     text = (out / "runs.jsonl").read_text(encoding="utf-8")
     assert f"by {owner}:" not in text and "by sandbox-owner:" in text
     assert f"{owner}x" in text  # only whole-word matches are replaced
+
+
+def test_quota_stop_is_not_an_infrastructure_failure_and_is_not_rerun(tmp_path, client, seeded):
+    from whytypedtools_eval.agent.model import ModelError
+
+    class Quota(PromptModel):
+        def step(self, messages, tools, *, allow_tools=True):
+            if "Close every" in messages[1]["content"]:
+                raise ModelError("Cohere monthly request limit reached ...", status=429, fatal=True)
+            return super().step(messages, tools, allow_tools=allow_tools)
+
+    with pytest.raises(EvalError, match="stopped early: Cohere monthly request limit"):
+        go(tmp_path, client, seeded, Quota(FLAKY_SCRIPT), plan(["f-open-bugs", "d-close-all"]))
+    out = next((tmp_path / "results").iterdir())
+    records = [json.loads(line) for line in (out / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
+    quota = records[-1]
+    assert len(records) == 2 and quota["task_id"] == "d-close-all"  # no rerun record
+    assert quota["infra_failure"] is False and quota["error_detail"]["fatal"] is True
+    meta = json.loads((out / "summary.json").read_text(encoding="utf-8"))["meta"]
+    assert meta["infrastructure_failures"] == {"tool_e": 0}

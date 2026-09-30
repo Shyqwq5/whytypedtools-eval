@@ -264,7 +264,10 @@ def score_run(
         "guard_unreadable": guard_failures - guard_provider_errors,
         # Design doc, "Infrastructure failures": a Cohere call (agent or guard) failed
         # after retries. Such runs are rerun once by the runner.
-        "infra_failure": status == "model_error" or guard_provider_errors > 0,
+        # A monthly quota stop (fatal) is not an infrastructure failure: the runner stops
+        # the eval instead of rerunning.
+        "infra_failure": (status == "model_error" and not (last_model.get("error") or {}).get("fatal"))
+        or guard_provider_errors > 0,
         "guard_fatal": guard_fatal,
         "event_counts": event_counts,
         "call_kinds": call_kinds,
