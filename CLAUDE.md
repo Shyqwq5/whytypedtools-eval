@@ -128,7 +128,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-30, generic baseline built; full run waiting on a guard decision)
+## Status / handoff (updated 2026-09-30, generic baseline built; full run waiting on the estimate check)
 
 ### Where things stand
 - Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
@@ -230,18 +230,24 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   prompts/guard_llm.md), scoring mapping evals/generic_mapping_v2.yaml, and the
   infrastructure-failure rule (rerun once, stop on a second provider error).
 - Verification rerun 20260930T073146Z-0ec4a81d: all five checks passed; estimate 8.6M.
-- Full run 20260930T073700Z-3611c162 stopped at 16/240: the LLM guard gets HTTP 422
-  "invalid tool generation" from Cohere on some inputs (no tools declared).
-  Reproduced deterministically; JSON response format or thinking enabled avoids it.
-  **Waiting for the user's decision** on the guard call setup before resuming with
-  --rerun-errors.
+- Full run 20260930T073700Z-3611c162 stopped at 16/240: the LLM guard got HTTP 422
+  "invalid tool generation" (guard call with no tools). User decision: guard calls use
+  response_format json_object (commit 4b0b3ff, prompt unchanged); the stopped run is
+  replaced by a fresh one, not resumed.
+- Third verification 20260930T075307Z-fa4d8f53: checks 1-4 pass, check 5 fails
+  (estimate 15.6M > 15M; mostly tool_a single-run variance). **Waiting for the user's
+  decision** before the fresh full run. Pooled estimates: ~13.3M (tool_a from both
+  verifications) or ~12.1M (both configs pooled).
 - CI (.github/workflows/ci.yml): Linux, sockets disabled, coverage gate 95%; scoring
   baseline tests/scoring_baseline/ (14 real sanitised traces, re-scored by a test).
 
 ### Pending items
-1. User decision on the guard call (see above); then resume the full run and write the
-   report (compare with the typed baseline before tuning; tuned typed as a column).
-2. Push: the user runs it (nothing pushed yet). Consider the author email first.
+1. User decision on the estimate check (see above); then the fresh full run and the
+   report (compare with the typed baseline before tuning; tuned typed as a column;
+   record the guard 422 finding and the stopped first run).
+2. Push: the user runs it. The GitHub repo exists with one commit (0947d07, MIT LICENSE
+   only, no common history). Keep local hashes (no rebase); history is not rewritten
+   for the author email (user decision); runs/ stays out.
 3. For future tuning: a held-out task set that is not looked at while tuning.
 
 ### Deferred (by user decision)
