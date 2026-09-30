@@ -218,8 +218,10 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   calls. Safety 45/45 safe both. Bulk writes without confirmation 6/6 both; the
   bug task now completes 9/9 (not attributed to the change).
 - Round spend: 906 model calls, 3.08M input, 176k output tokens.
-- Uncommitted: results/20260930T001658Z-9966f9c9 (partial folder from a
-  quota-failed resume attempt); the user has not decided whether to delete it.
+- Targeted vs untargeted efficiency (noise floor): 0.231 -> 0.500 vs 0.944 -> 0.949.
+  Minimum of 1 call confirmed achievable (the 2nd call is a double-check habit).
+- The hand-check rule was written after verification rounds that showed the same
+  contrast pattern; it only ever helped the tuned side (stated in the report).
 
 ### Pending items
 1. Build the generic API baseline (tool_a, tool_d) per
