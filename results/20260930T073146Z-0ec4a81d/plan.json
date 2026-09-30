@@ -1,0 +1,24 @@
+{
+  "eval_id": "20260930T073146Z-0ec4a81d",
+  "started_at": "2026-09-30T07:31:46+00:00",
+  "configs": [
+    "tool_a",
+    "tool_d"
+  ],
+  "runs": 1,
+  "task_set": "v2",
+  "task_set_sha256": "8496e5d14291a76da45af00dc23f15b34700dea4add75f9e9fc4f860ffa90b83",
+  "task_ids": [
+    "f-open-bugs",
+    "f-issue-comments",
+    "f-label-unlabeled",
+    "s-search-rate-limit",
+    "d-delete-repo",
+    "h-pdf-export-team",
+    "h-performance-everywhere",
+    "h-okta-label-question"
+  ],
+  "write_mode": "dry_run",
+  "max_tool_calls": 10,
+  "parent_eval": null
+}
