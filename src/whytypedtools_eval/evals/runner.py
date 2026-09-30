@@ -24,7 +24,7 @@ from typing import Any, Protocol
 from whytypedtools_eval.agent.loop import DEFAULT_MAX_TOOL_CALLS, SystemPrompt, run_agent
 from whytypedtools_eval.agent.model import ChatModel
 from whytypedtools_eval.agent.trace import REDACTED, new_run_id, read_trace, sha256_json, sha256_text, utc_now
-from whytypedtools_eval.evals.configs import CONFIGS, GENERIC, NEEDS_GUARD_MODEL, TYPED, SetupContext
+from whytypedtools_eval.evals.configs import GENERIC, NEEDS_GUARD_MODEL, SetupContext, is_typed, resolve
 from whytypedtools_eval.evals.effects import Effect
 from whytypedtools_eval.evals.report import aggregate, to_markdown
 from whytypedtools_eval.evals.scoring import BulkSpec, score_run
@@ -135,7 +135,7 @@ def run_eval(
     emit: Callable[[str], None] = print,
 ) -> Path:
     """Run the plan and return the results directory for this eval."""
-    unknown = [c for c in plan.configs if c not in CONFIGS]
+    unknown = [c for c in plan.configs if resolve(c) is None]
     if unknown:
         raise EvalError(f"unknown configuration(s): {', '.join(unknown)}")
     if any(c in NEEDS_GUARD_MODEL for c in plan.configs) and guard_model is None:
@@ -212,7 +212,7 @@ def run_eval(
                     rerun_reason: str | None) -> dict[str, Any]:
             nonlocal keymap
             prompt = prompt_for(task, keymap)
-            setup = CONFIGS[config](SetupContext(tool_client, repo, plan.write_mode, prompt, guard_model))
+            setup = resolve(config)(SetupContext(tool_client, repo, plan.write_mode, prompt, guard_model))
             requests_before = tool_client.requests_made
             result = run_agent(
                 prompt,
@@ -380,7 +380,7 @@ def _rescore(record: dict[str, Any], task: Task, trace_roots: list[Path], plan: 
         effects=[Effect(**e) for e in record["effects"]],
         keymap=keymap,
         write_mode=plan.write_mode,
-        typed=record["config"] in TYPED,
+        typed=is_typed(record["config"]),
         bulk=bulk_specs.get(task.id),
         **_generic_scoring(record["config"], task.id, generic_mapping),
     )

@@ -1,0 +1,49 @@
+# Known exceptions to the offline tool gate (tests/tools/test_tool_gate.py,
+# docs/design/tool-gate.md).
+#
+# Only frozen tools may have exceptions: their descriptions and schemas are exactly
+# what the reported typed results were produced with (tests/tools/frozen_tools.json),
+# so fixing a failed check would change the tool and invalidate those results.
+# A new tool must pass every check. Each entry lists the failing items exactly; an
+# item that starts passing fails the gate as a stale exception, so remove it then.
+
+frozen_tools: [list_issues, search_issues, get_issue, add_label]
+
+exceptions:
+  list_issues:
+    fields_described:
+      items: [issues.created_at, issues.updated_at, issues.body_excerpt, issues.body_truncated,
+              hint.message, hint.unknown_labels, hint.available_labels]
+      reason: >-
+        Described in prose ("dates", "the first 300 characters of the body", "`hint`
+        lists the unknown labels and the available ones") rather than by field name.
+        Changing the description would invalidate the reported results.
+  search_issues:
+    fields_described:
+      items: [effective_query, truncated, incomplete_results, issues.created_at, issues.updated_at,
+              issues.body_excerpt, issues.body_truncated, hint.unknown_labels, hint.available_labels]
+      reason: >-
+        As list_issues, plus three fields the description never mentions:
+        effective_query (the query actually sent), truncated (here: total_count >
+        returned, a different meaning from list_issues) and incomplete_results. The
+        same kind of gap as state_reason before tuning round 1; frozen.
+  get_issue:
+    fields_described:
+      items: [state_reason, created_at, updated_at, body_truncated, comments.created_at,
+              comments.body_truncated]
+      reason: >-
+        state_reason is returned but never described: tuning round 1 fixed this gap
+        for list_issues and search_issues only. The rest are described in prose
+        ("dates"). Frozen.
+    replay_truncation:
+      items: [body_truncated, comments.body_truncated]
+      reason: >-
+        The body is cut at 8,000 characters and each comment at 2,000; no seed issue
+        or comment is that long, so no real recording can show it. Adding one would
+        change the seed data, every recorded fixture and the eval gold answers.
+        comments_truncated is covered by the recorded get_comments_truncated fixture.
+  add_label:
+    fields_described:
+      items: [already_present]
+      reason: >-
+        Described in prose ("the ones that were already present"). Frozen.

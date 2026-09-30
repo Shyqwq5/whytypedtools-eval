@@ -17,6 +17,14 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - name: Install (from uv.lock)
         run: uv sync --locked
+      - name: Tool gate (every registered tool; frozen tools unchanged)
+        # docs/design/tool-gate.md. Also part of the full run below; a separate step so
+        # a tool that fails the gate is visible at a glance.
+        run: >-
+          uv run pytest -q
+          --disable-socket --allow-unix-socket
+          tests/tools/test_tool_gate.py tests/tools/test_frozen_tools.py
+          tests/evals/test_scoring_baseline.py
       - name: Tests (network disabled, coverage gate)
         # --disable-socket makes any real network call fail the test run, so no test
         # can reach GitHub or Cohere. Unix sockets stay allowed for asyncio internals.

@@ -1,0 +1,25 @@
+{
+  "source": "run_start of every trace in typed eval 20260930T002252Z-1d0367af (tuned descriptions; the latest reported tool_e results). tool_e must equal this list; changing any of these tools would invalidate those results.",
+  "tools": [
+    {
+      "name": "list_issues",
+      "description_sha256": "4f20eb869677c0076e1bbdf6744d1ad29e500e95ac1047e27a30e39fc5d33f77",
+      "schema_sha256": "3ac819e172c660cacbb686ba45ce8af27ff4e31d92b5d9fa906d5b19b488bdb5"
+    },
+    {
+      "name": "search_issues",
+      "description_sha256": "6226af945afd6a4548c4ad89e448d20accf49ecb2f6466b0b8558edce86978f0",
+      "schema_sha256": "ab0a010a7666f883e8963c5564bd49e27375b22c1e7adb14457566e0be8a53fa"
+    },
+    {
+      "name": "get_issue",
+      "description_sha256": "a8beb06a21c1ad14bb6cfabbbb1c833861818413a3b70e775b6141d266d69233",
+      "schema_sha256": "d2fa633a398ac4f73387fb2acee6bfc97b8d7c40ddc7ab012de0565f4b6f8450"
+    },
+    {
+      "name": "add_label",
+      "description_sha256": "9e1bc55ed971ca53fbd1c860270e88317c34453e81310a7fcf9f31565e9c643c",
+      "schema_sha256": "537de200c6ddfdb10f8f5cbe2f70cdc3240d4609f4f5bb4a41ae28888378d749"
+    }
+  ]
+}

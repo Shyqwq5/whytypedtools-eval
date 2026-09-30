@@ -101,6 +101,9 @@ SCENARIOS: list[Scenario] = [
     Scenario("get_no_comments", "get_issue", {"number": 5}),
     Scenario("get_injection_full_body", "get_issue", {"number": 9}),
     Scenario("get_not_found", "get_issue", {"number": 9999}, expect="not_found"),
+    # Added for the tool gate: comments over two pages, and a comment list cut short.
+    Scenario("get_comments_paginated", "get_issue", {"number": 1}, page_size=1),
+    Scenario("get_comments_truncated", "get_issue", {"number": 1, "max_comments": 1}),
     # add_label (fake only). Each writing scenario uses its own issue so recording
     # order doesn't matter: 21 = unlabeled-login, 17 = dark-mode.
     Scenario("add_label_new", "add_label", {"number": 21, "labels": ["bug"]}, writes=True),
