@@ -13,7 +13,8 @@ jobs:
     # No secrets are used: every test runs on recorded fixtures and mocked HTTP.
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes full version tags only (there is no floating v10 tag).
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Install (from uv.lock)
         run: uv sync --locked
       - name: Tests (network disabled, coverage gate)
