@@ -50,6 +50,30 @@ that changed it).
 
 `list_issues` and `search_issues` are deliberately easy to confuse, so tool-selection
 accuracy can be measured. There is deliberately no close, comment or delete tool.
+These four are **frozen**: all reported typed results use exactly them, and `tool_e`
+stays pinned to them.
+
+A fifth tool, `list_comments` (read: only an issue's comments, optional `since`
+filter), was added through the scaffold to prove the process below. It overlaps
+with `get_issue` on purpose, is served by the MCP server, and is not part of any
+reported result yet: its tool-set check (`tool_e+list_comments`) has not been run.
+
+### Adding a tool
+
+[`docs/how-to-add-a-tool.md`](docs/how-to-add-a-tool.md), in short:
+
+1. `uv run python scripts/new_tool.py <name> --overlaps <existing tool>` scaffolds the
+   tool, its tasks, recording scenarios and tests, and registers it.
+2. The **offline gate** ([design note](docs/design/tool-gate.md)) runs in CI for
+   every registered tool: structured input errors, replay of recorded responses and
+   of seven error types, pagination and truncation, every returned field named in
+   the description, requests and writes scoped to the sandbox by the tool, a valid
+   MCP schema, unique names. Frozen tools may have documented exceptions; a new tool
+   may not.
+3. The **tool-set check** (`scripts/toolset_check.py`, costs model calls) reruns the
+   v2 tasks plus the new tool's tasks with the tool registered and reports, per task,
+   changes in tool choice, pass rate, calls and tokens against the current typed
+   results.
 
 ## Tasks and scoring
 
@@ -376,6 +400,10 @@ or Cohere and need no credentials.
 **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the full suite on
 Linux on every push and pull request, with network sockets disabled (`pytest-socket`)
 so no test can reach an API, and fails below **95%** line coverage.
+
+**Tool gate.** CI runs the offline tool gate as its own step first
+(`tests/tools/test_tool_gate.py`, `tests/tools/test_frozen_tools.py`, the scoring
+baseline); see "Adding a tool".
 
 **Scoring baseline.** [`tests/scoring_baseline/`](tests/scoring_baseline/) holds 14
 real, sanitised eval traces (typed and generic; passes, failures, bulk writes, guard

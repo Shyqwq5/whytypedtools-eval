@@ -12,7 +12,7 @@ against a generic GitHub API tool (with rule-based and LLM guardrails).
 | tool_b | generic API + rule-based guard                             | later |
 | tool_c | generic API + LLM guard                                    | later |
 | tool_d | generic API + rule-based + LLM guard                       | designed |
-| tool_e | typed GitHub tools (4 tools, also served over MCP)         | built |
+| tool_e | typed GitHub tools (4 frozen tools; pinned)                 | built |
 
 - tool_e is the main work (~70% effort). The generic API variants are the control
   experiment (~30%). Design: `docs/design/generic-api-baseline.md`.
@@ -42,8 +42,8 @@ against a generic GitHub API tool (with rule-based and LLM guardrails).
 5. Eval sets (functional + safety) with per-run logs of every tool call.  (done for tool_e)
 6. First eval round, multiple runs per task.  (done: results/20260929T221449Z-c74f1261/report.md)
 7. Failure analysis -> tune descriptions/prompts -> second round. Record before/after.  (round 1 done)
-8. "How to add a tool" docs + scaffold command.
-9. CI: coverage checks + baseline comparison.  (done)
+8. "How to add a tool" docs + scaffold command.  (done: docs/how-to-add-a-tool.md, scripts/new_tool.py)
+9. CI: coverage checks + baseline comparison.  (done; tool gate: docs/design/tool-gate.md)
 10. Generic API control experiment (tool_a, tool_d first; b/c later).  (done for tool_a, tool_d)
 11. README with metrics tables and safety-vs-usability chart.  (done: docs/safety_usability.svg, scripts/make_chart.py)
 
@@ -131,7 +131,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 ## Status / handoff (updated 2026-09-30, generic baseline full run done)
 
 ### Where things stand
-- Steps 1-5 done for tool_e. `uv run pytest`: all pass (541 tests). Tool tests use
+- Steps 1-5 done for tool_e. `uv run pytest`: all pass (698 tests). Tool tests use
   fixtures recorded from the real sandbox (get_issue too); add_label fixtures come
   from the fake only (the recorder refuses write scenarios against the real sandbox).
 - Tools: list_issues, search_issues (confusable pair), get_issue (full body; the only
@@ -257,17 +257,31 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   Locally on Windows, the MCP server tests fail under --disable-socket (asyncio's
   proactor needs a socketpair); CI on Linux is unaffected.
 
+### Tool gate, tool-set check, scaffold (steps 9 and 8; docs/design/tool-gate.md)
+- Offline gate (tests/tools/test_tool_gate.py, checks in tests/tool_gate.py) runs for every
+  registered tool in CI. The 4 current tools are frozen (tests/tools/frozen_tools.json =
+  the tuned eval's trace hashes); never change them. Their failures are known exceptions
+  (tests/tools/gate_exceptions.yaml): fields named only in prose (get_issue never
+  describes state_reason; search never describes truncated/incomplete_results/
+  effective_query) and get_issue body truncation. New tools get no exceptions.
+- tool_e is pinned to the 4 frozen tools (configs.TOOL_E_TOOLS); new tools run as
+  tool_e+<name> (scripts/run_eval.py --toolset, scripts/toolset_check.py).
+- 5th tool list_comments (read-only, overlaps get_issue) added via scripts/new_tool.py;
+  passes the gate 20/20. Its fixtures were recorded read-only from the real sandbox.
+- **The tool-set check for tool_e+list_comments has NOT been run**: ~366 calls
+  (132 runs), waits for the user's quota and go-ahead (`scripts/toolset_check.py --run`).
+
 ### Pending items
 1. Push the new commits (plain `git push`, by the user). Pushed up to debcad1. The
    segment-1 results pushed in 6f44274 contained owner-name misspellings; re-sanitised
    in c9b699c. They stay in pushed history (user decision: no history rewrite).
 2. For future tuning: a held-out task set that is not looked at while tuning.
 3. Step 11 done (chart: src/whytypedtools_eval/evals/chart.py, SVG without a plotting
-   dependency; regenerate with the command in scripts/make_chart.py). Step 8 deferred.
+   dependency; regenerate with the command in scripts/make_chart.py). Steps 8 and 9 done.
+4. Tool-set check run for tool_e+list_comments, when the user says go.
 
 ### Deferred (by user decision)
-- Scaffold/docs for adding tools, tool_b and
-  tool_c, the search `sort=comments` check, search index lag measurement.
+- tool_b and tool_c, the search `sort=comments` check, search index lag measurement.
 
 ### Backlog (later steps)
 - All tool configurations must use the same system prompt (`prompts/system.md`),
