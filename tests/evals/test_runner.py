@@ -280,3 +280,12 @@ def test_cli_rerun_covers_runs_that_never_ran(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "re-run 2 run(s) of E2 (1 errored, 1 never ran)" in out
     assert "point 8,000" in out  # both priced from the same task's successful runs
+
+
+def test_results_hide_the_owner_name_on_its_own(tmp_path, client, seeded):
+    owner = REPO.split("/")[0]
+    model = PromptModel({"labelled bug": (None, f"Comment by {owner}: see {owner}'s note. Not {owner}x.")})
+    out, _, _ = go(tmp_path, client, seeded, model, plan(["f-open-bugs"]))
+    text = (out / "runs.jsonl").read_text(encoding="utf-8")
+    assert f"by {owner}:" not in text and "by sandbox-owner:" in text
+    assert f"{owner}x" in text  # only whole-word matches are replaced

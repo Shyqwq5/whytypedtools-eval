@@ -73,16 +73,20 @@ class EvalPlan:
 
 
 class _Sanitiser:
-    """Redacts secrets and the real repo name from anything written to results/."""
+    """Redacts secrets, the real repo name and the owner's name from anything written
+    to results/. The owner alone appears e.g. when an answer quotes a comment author."""
 
     def __init__(self, secrets: list[str], repo: str) -> None:
         self.secrets = [s for s in secrets if len(s) >= 8]
         self.repo = re.compile(re.escape(repo), re.IGNORECASE)
+        owner = repo.split("/")[0]
+        self.owner = re.compile(rf"(?<![A-Za-z0-9-]){re.escape(owner)}(?![A-Za-z0-9-])", re.IGNORECASE)
 
     def __call__(self, text: str) -> str:
         for s in self.secrets:
             text = text.replace(s, REDACTED)
-        return self.repo.sub(PUBLIC_REPO, text)
+        text = self.repo.sub(PUBLIC_REPO, text)
+        return self.owner.sub(PUBLIC_REPO.split("/")[0], text)
 
 
 def run_eval(
