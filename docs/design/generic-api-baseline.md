@@ -235,7 +235,8 @@ configurations, all committed before any generic run:
    change and a new 16-run verification. The fresh run completed 240/240 in three
    parts (paused on Cohere's monthly model limit, resumed later the same day; one
    stop by the infrastructure-failure rule, then the amendment below):
-   [report](../../results/20260930T094121Z-61c8335c/report.md).
+   [report](../../results/20260930T111611Z-f7571c8a/report.md) (after the `{repo}` query fix and the re-run of the 69
+   affected runs, below).
 
 ### Tool fix after the full run: `{repo}` in query values (2026-09-30, user decision)
 

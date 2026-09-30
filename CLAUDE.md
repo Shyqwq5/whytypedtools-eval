@@ -131,7 +131,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 ## Status / handoff (updated 2026-09-30, generic baseline full run done)
 
 ### Where things stand
-- Steps 1-5 done for tool_e. `uv run pytest`: all pass (532 tests). Tool tests use
+- Steps 1-5 done for tool_e. `uv run pytest`: all pass (536 tests). Tool tests use
   fixtures recorded from the real sandbox (get_issue too); add_label fixtures come
   from the fake only (the recorder refuses write scenarios against the real sandbox).
 - Tools: list_issues, search_issues (confusable pair), get_issue (full body; the only
@@ -223,7 +223,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - The hand-check rule was written after verification rounds that showed the same
   contrast pattern; it only ever helped the tuned side (stated in the report).
 
-### Generic API baseline (done: results/20260930T094121Z-61c8335c/report.md)
+### Generic API baseline (done: results/20260930T111611Z-f7571c8a/report.md)
 - Rules fixed before any run in docs/design/generic-api-baseline.md: sandbox
   protections, response cap 48,000 chars (from step 0), truncation at item boundaries,
   R1-R4 with exact messages (R4: 4th distinct issue), LLM guard (thinking disabled,
@@ -233,17 +233,23 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   estimate check 15.6M single-sample, pooled ~13.3M accepted (cost guard). Fresh run
   in three folders: 40c4cefd (part 1, c8541d5, 132 good; paused on the monthly model
   limit), 61ff45da (part 2a, a93e8f7, stopped by the rule: guard 422 again on the
-  rerun of tool_d i-label-if-timeout r2), 61c8335c (part 2b, 41b982b, 240/240).
-  Same model ID in all 248 traces. In docs, say only that it paused on the monthly
+  rerun of tool_d i-label-if-timeout r2), 61c8335c (part 2b, 41b982b, 240/240),
+  f7571c8a (part 3, 2d3ba4a: the 69 runs affected by the {repo}-in-query bug re-run
+  with --replace-runs after the tool fix; the final merged result). Same model ID in
+  all 317 traces. In docs, say only that it paused on the monthly
   limit and resumed later (no key/account details).
 - Amendment (user decision, 096e256): a guard HTTP 422 "invalid tool generation" is
   scored as the guard failing closed, not rerun (4 scored tool_d runs affected).
   41b982b: a resume of a resume finds traces along the parent_eval chain.
   c9b699c: sanitiser also redacts owner misspellings and the bare repo name.
-- Results (automatic = hand-checked): benign 72/93 (tool_a), 70/93 (tool_d) vs 93/93
-  typed; unsafe tool_a 10/45, tool_d 0/45; over-blocked tool_d 8/93; out-of-scope
-  reads 66 / 55 (117 of 121 = search without repo:); input per run 49.8k / 39.7k vs
-  10.2k typed. Guard 422 on 13/77 guard calls. Whole run 1,118 calls, 10.93M input.
+- Tool bug found after the report (2d3ba4a): the description says q = "repo:{repo}
+  ...", but {repo} was expanded only in the path (86 of 121 out-of-scope reads). Fixed;
+  user decision: re-run only the 69 affected runs (list in evals/reruns/).
+- Results (automatic = hand-checked): benign 80/93 (tool_a), 71/93 (tool_d) vs 93/93
+  typed; unsafe tool_a 11/45, tool_d 0/45; over-blocked tool_d 8/93 (4/89 without the
+  4 guard-422 runs); out-of-scope reads 8 / 15; input per run (agent + guard) 45.0k /
+  32.1k vs 10.2k typed. Guard 422 on 14/91 guard calls. Whole run incl. re-runs 1,447
+  calls, 13.50M input.
 - The system prompt does not name the sandbox repo; by design the generic tool uses
   {repo} (user decision: a finding, no change).
 - CI (.github/workflows/ci.yml): Linux, sockets disabled, coverage gate 95%; scoring
@@ -256,7 +262,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
    segment-1 results pushed in 6f44274 contained owner-name misspellings; re-sanitised
    in c9b699c. They stay in pushed history (user decision: no history rewrite).
 2. For future tuning: a held-out task set that is not looked at while tuning.
-3. Next roadmap steps: README chart (step 11), scaffold docs (step 8, deferred).
+3. Step 11 (safety-vs-usability chart) in progress; step 8 deferred.
 
 ### Deferred (by user decision)
 - Scaffold/docs for adding tools, tool_b and

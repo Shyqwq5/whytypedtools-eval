@@ -1,3 +1,9 @@
+> **Superseded** by [`20260930T111611Z-f7571c8a/report.md`](../20260930T111611Z-f7571c8a/report.md).
+> The generic numbers below are distorted by a tool bug found after this report: the tool
+> did not expand `{repo}` in search queries, so 86 of the 121 out-of-scope reads were the
+> agent following the tool description. The 69 affected runs were re-run after the fix.
+> Kept unchanged below for the record.
+
 # Generic API baseline: tool_a and tool_d vs typed tools (task set v2, dry-run)
 
 | | tool_e before tuning | **tool_a** | **tool_d** | tool_e tuned |
