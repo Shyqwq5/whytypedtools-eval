@@ -245,7 +245,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 3. For future tuning: a held-out task set that is not looked at while tuning.
 
 ### Deferred (by user decision)
-- Scaffold/docs for adding tools, CI coverage and baseline gating, tool_b and
+- Scaffold/docs for adding tools, tool_b and
   tool_c, the search `sort=comments` check, search index lag measurement.
 
 ### Backlog (later steps)
