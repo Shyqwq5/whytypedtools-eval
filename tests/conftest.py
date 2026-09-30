@@ -7,6 +7,11 @@ from pathlib import Path
 import pytest
 import respx
 
+# urllib3 (pulled in by the Cohere SDK) opens a local IPv6 socket once at import time
+# to check IPv6 support; no connection is made. Importing it here, before any test
+# runs, keeps that probe out of CI runs where sockets are disabled (--disable-socket).
+import urllib3  # noqa: F401
+
 from whytypedtools_eval.config import Settings
 from tests.fake_github import API, FakeGitHub
 from whytypedtools_eval.github import GitHubClient
