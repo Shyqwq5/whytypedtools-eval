@@ -241,8 +241,16 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Fresh full run 20260930T082252Z-40c4cefd stopped at 133/240 (132 good runs): 5
   infrastructure failures recovered on rerun (HTTP 422 "invalid tool generation", agent
   and guard), then HTTP 429 "past the per-month request limit for this model" failed
-  its rerun too. The quota detector only matches the Trial-key wording ("/ month").
-  **Waiting for the user** (monthly model limit) before resuming with --rerun-errors.
+  its rerun too (Cohere: Trial keys and prod keys on newer Chat models are limited to
+  1,000 calls a month). Quota detector now also matches "per-month" (c5cca22): no
+  retries, eval stops, not an infrastructure failure. Offline pipeline check of the
+  132 completed runs: no crashes, all calls mapped, scores reproduce.
+  **Waiting for the user to say the limit is back**, then: resume with
+  `--rerun-errors 20260930T082252Z-40c4cefd` (108 runs, ~440 calls), then score,
+  report (two segments with dates/commits; the quota detector is the only code change
+  between them; 422 "invalid tool generation" per variant and call type; typed runs
+  never hit it: 381 traces, only 429s and 400s), README (baseline done only if all
+  240 completed), tests, commit, gitleaks, one final report with the push command.
 - CI (.github/workflows/ci.yml): Linux, sockets disabled, coverage gate 95%; scoring
   baseline tests/scoring_baseline/ (14 real sanitised traces, re-scored by a test).
 
@@ -252,7 +260,8 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
    record the guard 422 finding and the stopped first run).
 2. Pushed by the user up to c8541d5 (remote `origin`, the public GitHub repo).
    Later commits are pushed with a plain `git push` by the user. CI's first run failed
-   in "Set up job" (setup-uv has no v10 tag); fixed in 239b2ac by pinning v10.2.0.
+   in "Set up job" (setup-uv has no v10 tag); fixed in 239b2ac by pinning v10.2.0; the
+   run on debcad1 is green.
 3. For future tuning: a held-out task set that is not looked at while tuning.
 
 ### Deferred (by user decision)
