@@ -41,7 +41,7 @@ against a generic GitHub API tool (with rule-based and LLM guardrails).
 4. Expand tools incl. confusable ones; expose as MCP server.  (done: 4 tools)
 5. Eval sets (functional + safety) with per-run logs of every tool call.  (done for tool_e)
 6. First eval round, multiple runs per task.  (done: results/20260929T221449Z-c74f1261/report.md)
-7. Failure analysis -> tune descriptions/prompts -> second round. Record before/after.
+7. Failure analysis -> tune descriptions/prompts -> second round. Record before/after.  (round 1 done)
 8. "How to add a tool" docs + scaffold command.
 9. CI: coverage checks + baseline comparison.
 10. Generic API control experiment (tool_a, tool_d first; b/c later).
@@ -128,7 +128,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-30, tuning round 1; waiting for Production key)
+## Status / handoff (updated 2026-09-30, tuning round 1 done)
 
 ### Where things stand
 - Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
@@ -207,29 +207,25 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Cost: 357 calls, 1.107M input (above the estimate range), 71k output, 294 GitHub
   requests. The hard subset used 52% of input tokens (bulk-label runs alone 25%).
 
-### Tuning round 1 (in progress)
-- Merged v2 baseline: results/20260929T231329Z-d2cbba8c (current scorer, 0 errors).
-- Two description changes, both tuned on the eval tasks themselves (no held-out set):
-  1. state_reason documented in list_issues + search_issues (5529da47c150 ->
-     11c736cf476a, 53d942219f99 -> 6226af945afd);
-  2. list_issues: truncated=false means the list is complete (-> 4f20eb869677).
-  Verified 5x on f-not-planned and h-closed-completed-count (dry-run).
-- Full tuned run results/20260929T232707Z-a54a7893 was stopped at 98/120 runs: the
-  Cohere Trial key's monthly quota (1000 calls) ran out. plan.json reconstructed.
-- Scoring unchanged since 3117a62 for both sides; hand-check rule fixed in
-  docs/design/eval-mvp.md ("Hand checks") and applied to both sides.
-- Quota 429s now fail fast (fatal) and stop the eval; evals are resumable.
+### Tuning round 1 (done: results/20260930T002252Z-1d0367af/report.md)
+- Before: 20260929T231329Z-d2cbba8c; after: 20260930T002252Z-1d0367af (resume of the
+  quota-stopped 20260929T232707Z-a54a7893). One scorer (unchanged since 3117a62) and
+  one hand-check rule (eval-mvp.md) on both sides.
+- Changes (tuned on the eval tasks, no held-out set): state_reason documented
+  (list/search); truncated=false = complete (list). Hashes in the report.
+- Result: pass rates at the ceiling on both sides after hand checks (93/93);
+  efficiency 0.898 -> 0.920, excess calls 0.60 -> 0.33; targeted tasks 2-8 -> 2
+  calls. Safety 45/45 safe both. Bulk writes without confirmation 6/6 both; the
+  bug task now completes 9/9 (not attributed to the change).
+- Round spend: 906 model calls, 3.08M input, 176k output tokens.
+- Uncommitted: results/20260930T001658Z-9966f9c9 (partial folder from a
+  quota-failed resume attempt); the user has not decided whether to delete it.
 
-### Pending items (in this order; the user decided it)
-1. **Wait for the user** (new Production key). No Cohere calls until then.
-2. On go-ahead: `uv run python -u scripts/run_eval.py --rerun-errors
-   20260929T232707Z-a54a7893` (36 runs: 14 errored + 22 never ran; ~108 calls,
-   ~359k input). Then the before/after report incl. efficiency, auto vs
-   hand-checked scores on both sides, both description changes, and the note
-   that they were tuned on the eval tasks with no held-out set.
-3. Build the generic API baseline (tool_a, tool_d) per
-   `docs/design/generic-api-baseline.md`.
-4. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
+### Pending items
+1. Build the generic API baseline (tool_a, tool_d) per
+   `docs/design/generic-api-baseline.md`; same scorer and hand-check rule.
+2. For future tuning: a held-out task set that is not looked at while tuning.
+3. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
 
 ### Deferred (by user decision)
 - Scaffold/docs for adding tools, CI coverage and baseline gating, tool_b and

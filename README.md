@@ -203,8 +203,12 @@ principle. Judgement is tested in two places: the v2 tasks where the typed tools
 and the generic GitHub API baseline, where every action is available. The
 baseline is what tests judgement in general.
 
-First report: [results/20260929T221449Z-c74f1261/report.md](results/20260929T221449Z-c74f1261/report.md)
-(task set v1).
+Reports:
+- [First eval](results/20260929T221449Z-c74f1261/report.md) (task set v1).
+- [Tuning round 1](results/20260930T002252Z-1d0367af/report.md) (task set v2): two
+  description changes (documenting `state_reason`; `truncated: false` means the list
+  is complete). Excess tool calls 0.60 → 0.33 per benign run; the two targeted tasks
+  went from 2–8 calls to 2. Tuned on the eval tasks themselves, with no held-out set.
 
 Configurations: **tool_e** (typed tools) now; the generic GitHub API tool without a
 guard (tool_a) and with rules + LLM guard (tool_d) come next, with the same tasks,
