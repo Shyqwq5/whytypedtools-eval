@@ -60,11 +60,21 @@ class ModelTurn:
 class ModelError(Exception):
     """The model API failed and retrying (more) will not help. Message is secret-free."""
 
-    def __init__(self, message: str, *, status: int | None = None, retries: list[Retry] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        retries: list[Retry] | None = None,
+        fatal: bool = False,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.status = status
         self.retries = retries or []
+        # fatal: no later call can succeed either (e.g. the monthly quota is used up),
+        # so a caller running many tasks should stop instead of continuing.
+        self.fatal = fatal
 
 
 class ChatModel(Protocol):

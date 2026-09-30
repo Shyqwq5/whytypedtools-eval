@@ -125,6 +125,22 @@ def _usage(usage: Any) -> Usage:
     )
 
 
+QUOTA_MESSAGE = (
+    "Cohere monthly API call quota is used up (Trial keys allow 1000 calls/month). "
+    "Retrying will not help: use a Production key or wait for the monthly reset."
+)
+
+
+def _is_quota_exhausted(exc: ApiError) -> bool:
+    """A 429 for the monthly call quota, as opposed to a per-minute rate limit.
+
+    The body is only inspected, never logged: it can echo account details.
+    """
+    body = exc.body if isinstance(exc.body, dict) else {}
+    message = str(body.get("message", "")).lower()
+    return exc.status_code == 429 and "/ month" in message.replace("/month", "/ month")
+
+
 def _retry_after(exc: ApiError) -> float | None:
     headers = {k.lower(): v for k, v in (exc.headers or {}).items()}
     try:
@@ -198,6 +214,8 @@ class CohereModel:
                 resp = self._client.chat(**request)
             except ApiError as exc:
                 status = exc.status_code
+                if _is_quota_exhausted(exc):
+                    raise ModelError(QUOTA_MESSAGE, status=status, retries=retries, fatal=True) from None
                 if status not in RETRYABLE_STATUSES:
                     raise ModelError(f"Cohere API returned HTTP {status}.", status=status, retries=retries) from None
                 reason = f"http_{status}"

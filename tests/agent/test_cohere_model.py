@@ -261,3 +261,21 @@ def test_describe():
         "thinking": "enabled", "sdk_version": None,
     }
     assert info["sdk_version"] == cohere.__version__
+
+
+def test_monthly_quota_429_fails_fast():
+    body = {"message": "You are using a Trial key, which is limited to 1000 API calls / month. You can ..."}
+    client = FakeClient(ApiError(status_code=429, body=body), text_response())
+    model, sleeps = make(client)
+    with pytest.raises(ModelError) as exc:
+        model.step(MESSAGES, [])
+    assert exc.value.fatal is True and exc.value.status == 429
+    assert "monthly API call quota" in exc.value.message and "Trial key, which" not in exc.value.message
+    assert sleeps == [] and len(client.requests) == 1
+
+
+def test_per_minute_429_is_still_retried():
+    client = FakeClient(ApiError(status_code=429, body={"message": "too many requests"}), text_response())
+    model, sleeps = make(client)
+    assert model.step(MESSAGES, []).text == "Answer."
+    assert len(sleeps) == 1

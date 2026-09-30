@@ -187,7 +187,7 @@ def run_agent(
                         allow_tools=allow_tools,
                         latency_ms=round((time.perf_counter() - started) * 1000),
                         retries=[r.__dict__ for r in exc.retries],
-                        error={"message": exc.message, "status": exc.status},
+                        error={"message": exc.message, "status": exc.status, "fatal": exc.fatal},
                     )
                     return finish("model_error", None)
                 totals.model_calls += 1

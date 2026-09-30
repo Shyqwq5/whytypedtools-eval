@@ -233,7 +233,7 @@ def test_model_error_ends_run(tmp_path):
     result, trace = run(model, tmp_path=tmp_path)
     assert (result.status, result.final_answer) == ("model_error", None)
     event = trace[1]
-    assert event["error"] == {"message": "Cohere API returned HTTP 401.", "status": 401}
+    assert event["error"] == {"message": "Cohere API returned HTTP 401.", "status": 401, "fatal": False}
     assert [r["reason"] for r in event["retries"]] == ["http_429", "http_429"]
     assert trace[-1]["status"] == "model_error"
 
