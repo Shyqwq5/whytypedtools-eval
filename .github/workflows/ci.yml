@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # No secrets are used: every test runs on recorded fixtures and mocked HTTP.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Install (from uv.lock)
+        run: uv sync --locked
+      - name: Tests (network disabled, coverage gate)
+        # --disable-socket makes any real network call fail the test run, so no test
+        # can reach GitHub or Cohere. Unix sockets stay allowed for asyncio internals.
+        run: >-
+          uv run pytest
+          --disable-socket --allow-unix-socket
+          --cov=whytypedtools_eval --cov-report=term
+          --cov-fail-under=95
