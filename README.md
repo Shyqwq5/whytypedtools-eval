@@ -1,5 +1,7 @@
 # whytypedtools-eval
 
+[![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+
 How much does an agent gain from **typed tools** compared with a **generic API tool**?
 This repo has four typed GitHub issue tools (also served over MCP), a minimal
 Cohere-based test agent, and an eval suite that measures, per tool configuration:
@@ -328,4 +330,17 @@ found by recording against a real sandbox.
 uv run pytest
 ```
 
-Tests mock all HTTP with respx and never call the real GitHub API.
+Tests mock all HTTP with respx and replay recorded fixtures; they never call GitHub
+or Cohere and need no credentials.
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the full suite on
+Linux on every push and pull request, with network sockets disabled (`pytest-socket`)
+so no test can reach an API, and fails below **95%** line coverage.
+
+**Scoring baseline.** [`tests/scoring_baseline/`](tests/scoring_baseline/) holds 14
+real, sanitised eval traces (typed and generic; passes, failures, bulk writes, guard
+blocks and failures, out-of-scope reads, a truncated response) with their scores.
+`tests/evals/test_scoring_baseline.py` re-scores them and fails if any score changes,
+so a change to the scorer, the task files or the generic mapping cannot silently
+change reported results. Rebuild with `scripts/build_scoring_baseline.py` (needs the
+local traces) only for an intended change, and explain it in the commit.
