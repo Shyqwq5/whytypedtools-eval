@@ -84,6 +84,12 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--rerun-errors", metavar="EVAL_ID",
                    help="Re-run the runs of an earlier eval that errored or never ran (e.g. it was "
                         "interrupted); same task set and mode. Writes a merged result to a new folder.")
+    p.add_argument("--replace-runs", metavar="FILE", type=Path,
+                   help="With --rerun-errors: also re-run these completed runs and replace their records "
+                        "(one 'config task_id run' per line, run counted from 1; '#' starts a comment). "
+                        "Needs --rerun-reason.")
+    p.add_argument("--rerun-reason", metavar="TEXT",
+                   help="Why the --replace-runs runs are re-run; recorded in each new run and the summary.")
     return p
 
 
@@ -99,6 +105,20 @@ def _cohere(settings: Settings, min_interval_s: float, need_guard: bool) -> Mode
     guard = CohereModel.from_settings(settings, thinking="disabled", response_format=GUARD_RESPONSE_FORMAT,
                                       pacer=pacer) if need_guard else None
     return agent, guard
+
+
+def _read_run_list(path: Path) -> list[tuple[str, str, int]]:
+    """'config task_id run' per line (run counted from 1) -> (config, task_id, run_index)."""
+    keys = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 3 or not parts[2].isdigit() or int(parts[2]) < 1:
+            raise ValueError(f"expected 'config task_id run', got {line!r}")
+        keys.append((parts[0], parts[1], int(parts[2]) - 1))
+    return keys
 
 
 def _load_parent(results_dir: Path, eval_id: str) -> tuple[dict, list[dict]]:
@@ -157,6 +177,24 @@ def main(
         args.configs, args.runs = meta["configs"], meta["runs"]
         # Superseded runs (rerun after an infrastructure failure) never count as done.
         good = [r for r in parent if not r["error"] and not r.get("superseded_by")]
+        replaces: dict[tuple[str, str, int], str] = {}
+        if args.replace_runs:
+            if not args.rerun_reason:
+                print("error: --replace-runs needs --rerun-reason", file=sys.stderr)
+                return 2
+            by_key = {(r["config"], r["task_id"], r["run_index"]): r for r in good}
+            try:
+                listed = _read_run_list(args.replace_runs)
+            except (OSError, ValueError) as exc:
+                print(f"error: cannot read {args.replace_runs}: {exc}", file=sys.stderr)
+                return 2
+            unknown = [k for k in listed if k not in by_key]
+            if unknown:
+                print(f"error: not a completed run of {args.rerun_errors}: "
+                      f"{', '.join(f'{c} {t} run {i + 1}' for c, t, i in unknown)}", file=sys.stderr)
+                return 2
+            replaces = {k: by_key[k]["run_id"] for k in listed}
+            good = [r for r in good if (r["config"], r["task_id"], r["run_index"]) not in replaces]
         done = {(r["config"], r["task_id"], r["run_index"]) for r in good}
         planned = {(c, t.id, i) for i in range(args.runs) for t in tasks for c in args.configs}
         todo = planned - done
@@ -164,7 +202,7 @@ def main(
             print(f"eval {args.rerun_errors} has no errored or missing runs; nothing to do")
             return 0
         errored = {(r["config"], r["task_id"], r["run_index"]): r for r in parent
-                   if r["error"] and not r.get("superseded_by")}
+                   if (r["error"] or r.get("run_id") in replaces.values()) and not r.get("superseded_by")}
         category = {t.id: t.category for t in tasks}
         rerun = {
             "only": frozenset(todo),
@@ -174,12 +212,15 @@ def main(
             "errors": [errored.get(k) or {"config": k[0], "task_id": k[1], "run_index": k[2],
                                           "category": category[k[1]]} for k in sorted(todo)],
             "missing": len(todo - set(errored)),
+            "replaces": replaces or None,
         }
 
     if args.estimate:
         if rerun:
+            replaced = len(rerun["replaces"] or {})
             print(f"plan: re-run {len(rerun['errors'])} run(s) of {rerun['parent_eval']} "
-                  f"({len(rerun['errors']) - rerun['missing']} errored, {rerun['missing']} never ran); mode {mode}")
+                  f"({len(rerun['errors']) - rerun['missing'] - replaced} errored, {rerun['missing']} never ran"
+                  f"{f', {replaced} replaced' if replaced else ''}); mode {mode}")
             print(format_estimate(estimate_reruns(rerun["errors"], list(rerun["base_records"]))))
             return 0
         print(f"plan: task set {task_set.name}, {len(tasks)} task(s) x {args.runs} run(s) x {', '.join(args.configs)}; "
@@ -217,7 +258,8 @@ def main(
     plan = EvalPlan(args.configs, tasks, args.runs, mode, args.max_tool_calls,
                     task_set=task_set.name, task_set_sha256=task_set.sha256,
                     only=rerun.get("only"), base_records=rerun.get("base_records", ()),
-                    parent_eval=rerun.get("parent_eval"))
+                    parent_eval=rerun.get("parent_eval"), replaces=rerun.get("replaces"),
+                    rerun_reason=args.rerun_reason if rerun.get("replaces") else None)
     try:
         run_eval(
             plan,

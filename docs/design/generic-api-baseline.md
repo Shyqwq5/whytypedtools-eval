@@ -237,6 +237,25 @@ configurations, all committed before any generic run:
    stop by the infrastructure-failure rule, then the amendment below):
    [report](../../results/20260930T094121Z-61c8335c/report.md).
 
+### Tool fix after the full run: `{repo}` in query values (2026-09-30, user decision)
+
+- **Bug, found while checking the full run's report:** the tool description tells the
+  agent to search with `q: "repo:{repo} ..."`, but the tool expanded `{repo}` only in
+  `path`. Such searches were refused as out-of-scope reads (86 of the 121 in the full
+  run), although the agent had followed the description. The tests only covered
+  `repo:` with the real name.
+- **Fix:** `{repo}` is expanded in every string query value (and strings in lists).
+  Nothing else in the tool, the guards, the mapping or the scoring changed.
+- **Re-run of the affected runs only** (user decision; cheaper than a fresh 240):
+  exactly 69 runs of `20260930T094121Z-61c8335c` (tool_a 36, tool_d 33) sent `{repo}`
+  in a query value; no other run did, and none sent it in a body, so the fix changes
+  no other run's requests. The 69 are listed in
+  `evals/reruns/generic_v2_repo_placeholder_in_query.txt` and re-run with
+  `--replace-runs` into a new folder; each new record has `rerun_of` (the replaced
+  run) and `rerun_reason`. The replaced records stay in their folder. Caveat: the
+  merged result mixes two tool versions, which is equivalent only because the other
+  171 runs never used the changed code path.
+
 ### Infrastructure failures (fixed 2026-09-30, before the verification rerun and any full-run result)
 
 - **Provider error**: an agent or guard call to Cohere that fails after the

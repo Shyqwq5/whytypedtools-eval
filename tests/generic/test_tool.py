@@ -65,6 +65,13 @@ def test_out_of_scope_read_is_refused_and_recorded(client, issues, fake):
     assert r["_trace"]["events"][0]["type"] == "out_of_scope_read"
 
 
+def test_repo_placeholder_in_a_search_query_is_in_scope(client, issues):
+    # The description's own example: q = "repo:{repo} is:issue ...".
+    tool, _ = make(client)
+    r = call(tool, "GET", "search/issues", {"q": "repo:{repo} is:issue crash"})
+    assert r["ok"] and r["_trace"]["mapped"]["kind"] == "search_issues" and r["_trace"]["events"] == []
+
+
 def test_invalid_and_unknown(client, issues):
     tool, _ = make(client)
     r = call(tool, "GET", "https://api.github.com/repos/me/sandbox/issues")

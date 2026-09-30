@@ -261,6 +261,42 @@ def test_cli_rerun_estimate_and_checks(tmp_path, capsys):
     assert cli.main(["--rerun-errors", "E1", "--live", "--estimate", "--results-dir", str(tmp_path)]) == 2
 
 
+
+def test_cli_replace_runs_checks_the_list(tmp_path, capsys):
+    parent = tmp_path / "E1"
+    parent.mkdir()
+    task_set = __import__("whytypedtools_eval.evals.tasks", fromlist=["load_task_set"]).load_task_set()
+    meta = {"task_set_sha256": task_set.sha256, "write_mode": "dry_run", "task_ids": ["f-open-bugs"],
+            "configs": ["tool_e"], "runs": 2}
+    (parent / "summary.json").write_text(json.dumps({"meta": meta}), encoding="utf-8")
+    base = {"config": "tool_e", "task_id": "f-open-bugs", "category": "functional", "model_calls": 2,
+            "input_tokens": 5000, "output_tokens": 500, "github_requests": 2, "error": False}
+    rows = [{**base, "run_index": 0, "run_id": "R0"}, {**base, "run_index": 1, "run_id": "R1"}]
+    (parent / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    listed = tmp_path / "list.txt"
+    listed.write_text("# fixed tool\ntool_e f-open-bugs 2\n", encoding="utf-8")
+    args = ["--rerun-errors", "E1", "--estimate", "--results-dir", str(tmp_path), "--replace-runs", str(listed)]
+    assert cli.main(args) == 2  # no reason given
+    assert cli.main(args + ["--rerun-reason", "tool fix"]) == 0
+    assert "re-run 1 run(s) of E1 (0 errored, 0 never ran, 1 replaced)" in capsys.readouterr().out
+    listed.write_text("tool_e f-open-bugs 3\n", encoding="utf-8")
+    assert cli.main(args + ["--rerun-reason", "tool fix"]) == 2
+    assert "not a completed run of E1: tool_e f-open-bugs run 3" in capsys.readouterr().err
+
+
+def test_replaced_runs_point_at_the_record_they_replace(tmp_path, client, seeded):
+    out, records, _ = go(tmp_path, client, seeded, Flaky(FLAKY_SCRIPT, 0), plan(["f-open-bugs"], runs=2))
+    old = records[1]
+    rerun = EvalPlan(["tool_e"], [TASKS["f-open-bugs"]], 2, "dry_run",
+                     only=frozenset({("tool_e", "f-open-bugs", 1)}), base_records=(records[0],),
+                     parent_eval=out.name, replaces={("tool_e", "f-open-bugs", 1): old["run_id"]},
+                     rerun_reason="tool fix")
+    out2, merged, _ = go(tmp_path, client, seeded, Flaky(FLAKY_SCRIPT, 0), rerun)
+    new = merged[1]
+    assert new["rerun_of"] == old["run_id"] and new["rerun_reason"] == "tool fix" and new["run_id"] != old["run_id"]
+    meta = json.loads((out2 / "summary.json").read_text(encoding="utf-8"))["meta"]
+    assert meta["replaced_runs"] == [["tool_e", "f-open-bugs", 1, old["run_id"]]] and meta["replace_reason"] == "tool fix"
+
 def test_bulk_runs_are_reported_apart_from_success_and_safety(tmp_path, client, seeded, fake):
     from whytypedtools_eval.evals.tasks import load_bulk_specs
 

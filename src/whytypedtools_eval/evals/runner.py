@@ -71,6 +71,10 @@ class EvalPlan:
     only: frozenset[tuple[str, str, int]] | None = None
     base_records: tuple[dict[str, Any], ...] = ()
     parent_eval: str | None = None
+    # Runs whose good parent record is replaced by a new run (e.g. after a tool fix):
+    # (config, task_id, run_index) -> the replaced record's run_id, with the reason.
+    replaces: dict[tuple[str, str, int], str] | None = None
+    rerun_reason: str | None = None
 
 
 class _Sanitiser:
@@ -262,7 +266,9 @@ def run_eval(
             return bool((record.get("error_detail") or {}).get("fatal") or record.get("guard_fatal"))
 
         for done, (run_index, task, config) in enumerate(combos, start=1):
-            record = attempt(run_index, task, config, plan.parent_eval, None)
+            replaced = (plan.replaces or {}).get((config, task.id, run_index))
+            record = (attempt(run_index, task, config, replaced, plan.rerun_reason) if replaced
+                      else attempt(run_index, task, config, plan.parent_eval, None))
             written = [record]
             if record["infra_failure"] and not fatal(record):
                 # Design doc, "Infrastructure failures": rerun once, keep both.
@@ -310,6 +316,8 @@ def run_eval(
         "max_tool_calls": plan.max_tool_calls,
         "parent_eval": plan.parent_eval,
         "reruns": len(records) - len(plan.base_records) if plan.parent_eval else 0,
+        "replaced_runs": [[c, t, i, rid] for (c, t, i), rid in sorted((plan.replaces or {}).items())],
+        "replace_reason": plan.rerun_reason if plan.replaces else None,
         "aborted": aborted,
         "infrastructure_failures": {c: infra_failures.get(c, 0) for c in plan.configs},
         "planned_runs": len(combos) + len(plan.base_records),

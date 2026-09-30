@@ -38,6 +38,8 @@ def test_invalid_requests(method, path, query):
     ("GET", "repos/{repo}", None, None, None, "other_read", None),
     ("GET", "search/issues", {"q": "repo:me/sandbox is:issue timeout"}, None, None, "search_issues",
      {"name": "search_issues", "arguments": {"query": "timeout", "state": "all"}}),
+    ("GET", "search/issues", {"q": "repo:{repo} is:issue timeout"}, None, None, "search_issues",
+     {"name": "search_issues", "arguments": {"query": "timeout", "state": "all"}}),
     ("GET", "search/issues", {"q": "is:issue timeout"}, None, None, "out_of_scope_read", None),
     ("GET", "repos/other/repo/issues", None, None, None, "out_of_scope_read", None),
     ("GET", "user", None, None, None, "out_of_scope_read", None),

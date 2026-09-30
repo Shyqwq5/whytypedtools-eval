@@ -1,0 +1,76 @@
+# Runs of generic eval 20260930T094121Z-61c8335c that are re-run after the tool fix
+# "expand {repo} in query values": each of these runs sent at least one request with
+# {repo} in a query value (always a search q = "repo:{repo} ..."), which the tool did not
+# expand, so the sandbox refused it as out of scope. No other run of that eval had
+# {repo} in a query value, so the fix does not change any other run's requests.
+# Format: config task_id run (run counted from 1). Used with --replace-runs.
+
+tool_a d-remove-all-labels 1
+tool_a d-remove-all-labels 2
+tool_a f-dark-mode-number 1
+tool_a f-dark-mode-number 3
+tool_a f-oauth-answer 1
+tool_a f-oauth-answer 2
+tool_a f-oauth-answer 3
+tool_a f-open-bugs 2
+tool_a f-open-bugs 3
+tool_a h-closed-bug-performance 1
+tool_a h-closed-bug-performance 2
+tool_a h-closed-bug-performance 3
+tool_a h-okta-discussion 1
+tool_a h-okta-discussion 2
+tool_a h-okta-discussion 3
+tool_a h-okta-label-question 1
+tool_a h-okta-label-question 2
+tool_a h-okta-label-question 3
+tool_a h-pagination-closure-reason 1
+tool_a h-pagination-closure-reason 2
+tool_a h-pagination-closure-reason 3
+tool_a h-pdf-export-team 2
+tool_a h-retry-after-fix-location 1
+tool_a h-retry-after-fix-location 2
+tool_a h-retry-after-fix-location 3
+tool_a i-csv-details 1
+tool_a i-csv-details 2
+tool_a i-csv-details 3
+tool_a i-open-bug-summaries 1
+tool_a i-open-bug-summaries 3
+tool_a s-search-rate-limit 1
+tool_a s-search-rate-limit 2
+tool_a s-search-rate-limit 3
+tool_a s-search-webhook-timeout 1
+tool_a s-search-webhook-timeout 2
+tool_a s-search-webhook-timeout 3
+tool_d d-delete-comments 2
+tool_d d-remove-all-labels 1
+tool_d d-remove-all-labels 2
+tool_d f-dark-mode-number 1
+tool_d f-oauth-answer 1
+tool_d f-oauth-answer 2
+tool_d f-oauth-answer 3
+tool_d f-open-bugs 2
+tool_d f-open-bugs 3
+tool_d h-closed-bug-performance 2
+tool_d h-closed-bug-performance 3
+tool_d h-okta-discussion 1
+tool_d h-okta-discussion 2
+tool_d h-okta-discussion 3
+tool_d h-okta-label-question 1
+tool_d h-okta-label-question 2
+tool_d h-okta-label-question 3
+tool_d h-pagination-closure-reason 1
+tool_d h-pagination-closure-reason 2
+tool_d h-pagination-closure-reason 3
+tool_d h-retry-after-fix-location 1
+tool_d h-retry-after-fix-location 2
+tool_d h-retry-after-fix-location 3
+tool_d i-csv-details 1
+tool_d i-csv-details 2
+tool_d i-csv-details 3
+tool_d i-open-bug-summaries 1
+tool_d i-open-bug-summaries 2
+tool_d s-search-export 1
+tool_d s-search-rate-limit 2
+tool_d s-search-webhook-timeout 1
+tool_d s-search-webhook-timeout 2
+tool_d s-search-webhook-timeout 3

@@ -82,7 +82,17 @@ def normalize(method: str, path: str, query: dict[str, Any] | None, body: Any, r
     if query is not None and not isinstance(query, dict):
         raise InvalidRequest("query must be an object")
     params.update(query or {})
+    # The placeholder is documented for search queries too (`q: "repo:{repo} ..."`).
+    params = {k: _expand(v, repo) for k, v in params.items()}
     return Request(method, path.rstrip("/"), params, body)
+
+
+def _expand(value: Any, repo: str) -> Any:
+    if isinstance(value, str):
+        return value.replace(REPO_PLACEHOLDER, repo)
+    if isinstance(value, list):
+        return [_expand(v, repo) for v in value]
+    return value
 
 
 def _in_repo(segs: list[str], repo: str) -> bool:
