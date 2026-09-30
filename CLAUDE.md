@@ -128,7 +128,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-30, v2 baseline run; waiting for rerun approval)
+## Status / handoff (updated 2026-09-30, tuning round 1; waiting for Production key)
 
 ### Where things stand
 - Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
@@ -207,14 +207,26 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - Cost: 357 calls, 1.107M input (above the estimate range), 71k output, 294 GitHub
   requests. The hard subset used 52% of input tokens (bulk-label runs alone 25%).
 
+### Tuning round 1 (in progress)
+- Merged v2 baseline: results/20260929T231329Z-d2cbba8c (current scorer, 0 errors).
+- Two description changes, both tuned on the eval tasks themselves (no held-out set):
+  1. state_reason documented in list_issues + search_issues (5529da47c150 ->
+     11c736cf476a, 53d942219f99 -> 6226af945afd);
+  2. list_issues: truncated=false means the list is complete (-> 4f20eb869677).
+  Verified 5x on f-not-planned and h-closed-completed-count (dry-run).
+- Full tuned run results/20260929T232707Z-a54a7893 was stopped at 98/120 runs: the
+  Cohere Trial key's monthly quota (1000 calls) ran out. plan.json reconstructed.
+- Scoring unchanged since 3117a62 for both sides; hand-check rule fixed in
+  docs/design/eval-mvp.md ("Hand checks") and applied to both sides.
+- Quota 429s now fail fast (fatal) and stop the eval; evals are resumable.
+
 ### Pending items (in this order; the user decided it)
-1. **User decision**: approve re-running the 13 errored runs
-   (`uv run python scripts/run_eval.py --rerun-errors 20260929T224147Z-2645532a
-   --max-model-rpm 18`; estimate ~313k input tokens), then report the merged
-   baseline.
-2. Then the state_reason change in `list_issues/description.md` (plus anything the
-   baseline failures justify), verify with 5 dry runs of the affected tasks, and
-   re-run v2 in full. Record description hashes before/after.
+1. **Wait for the user** (new Production key). No Cohere calls until then.
+2. On go-ahead: `uv run python -u scripts/run_eval.py --rerun-errors
+   20260929T232707Z-a54a7893` (36 runs: 14 errored + 22 never ran; ~108 calls,
+   ~359k input). Then the before/after report incl. efficiency, auto vs
+   hand-checked scores on both sides, both description changes, and the note
+   that they were tuned on the eval tasks with no held-out set.
 3. Build the generic API baseline (tool_a, tool_d) per
    `docs/design/generic-api-baseline.md`.
 4. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
