@@ -44,7 +44,7 @@ against a generic GitHub API tool (with rule-based and LLM guardrails).
 7. Failure analysis -> tune descriptions/prompts -> second round. Record before/after.  (round 1 done)
 8. "How to add a tool" docs + scaffold command.
 9. CI: coverage checks + baseline comparison.  (done)
-10. Generic API control experiment (tool_a, tool_d first; b/c later).  <- in progress
+10. Generic API control experiment (tool_a, tool_d first; b/c later).  (done for tool_a, tool_d)
 11. README with metrics tables and safety-vs-usability chart.
 
 ## Two repositories
@@ -128,10 +128,10 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-30, generic full run stopped at 133/240 on a monthly model limit)
+## Status / handoff (updated 2026-09-30, generic baseline full run done)
 
 ### Where things stand
-- Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
+- Steps 1-5 done for tool_e. `uv run pytest`: all pass (532 tests). Tool tests use
   fixtures recorded from the real sandbox (get_issue too); add_label fixtures come
   from the fake only (the recorder refuses write scenarios against the real sandbox).
 - Tools: list_issues, search_issues (confusable pair), get_issue (full body; the only
@@ -140,8 +140,8 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   Dry-run smoke runs on 5 tasks all passed after fixing truncated prompts.
 - Estimate for the full first round (30 tasks x 3 runs, tool_e): ~190 model calls,
   ~510k input / ~53k output tokens (range x0.7-x1.5), ~590 GitHub requests, ~14 min.
-- Git: branch `main`, **no remote configured; nothing has been pushed yet**.
-  Before the first push run `git ls-files | grep -E '\.env$|state\.json'` (must be empty).
+- Git: branch `main`, remote `origin` (the public GitHub repo); pushes are done by the user.
+  Before each push run `git ls-files | grep -E '\.env$|state\.json'` (must be empty).
 - The local folder is still named `tool_eval`; the user plans to rename it to
   `whytypedtools-eval` (close Claude Code first, then `uv sync` to rebuild `.venv`).
 
@@ -223,46 +223,40 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - The hand-check rule was written after verification rounds that showed the same
   contrast pattern; it only ever helped the tuned side (stated in the report).
 
-### Generic API baseline (built; full run stopped by the rule)
+### Generic API baseline (done: results/20260930T094121Z-61c8335c/report.md)
 - Rules fixed before any run in docs/design/generic-api-baseline.md: sandbox
   protections, response cap 48,000 chars (from step 0), truncation at item boundaries,
   R1-R4 with exact messages (R4: 4th distinct issue), LLM guard (thinking disabled,
-  prompts/guard_llm.md), scoring mapping evals/generic_mapping_v2.yaml, and the
+  JSON output, prompts/guard_llm.md), scoring mapping evals/generic_mapping_v2.yaml,
   infrastructure-failure rule (rerun once, stop on a second provider error).
-- Verification rerun 20260930T073146Z-0ec4a81d: all five checks passed; estimate 8.6M.
-- Full run 20260930T073700Z-3611c162 stopped at 16/240: the LLM guard got HTTP 422
-  "invalid tool generation" (guard call with no tools). User decision: guard calls use
-  response_format json_object (commit 4b0b3ff, prompt unchanged); the stopped run is
-  replaced by a fresh one, not resumed.
-- Third verification 20260930T075307Z-fa4d8f53: checks 1-4 pass, check 5 failed
-  (15.6M); the user accepted the pooled estimate (~13.3M; cost guard, not a scoring rule).
-- Repo name: the system prompt does not name the sandbox repo; by design the generic tool
-  uses {repo} (user decision: option 1, a finding, no change).
-- Fresh full run 20260930T082252Z-40c4cefd stopped at 133/240 (132 good runs): 5
-  infrastructure failures recovered on rerun (HTTP 422 "invalid tool generation", agent
-  and guard), then HTTP 429 "past the per-month request limit for this model" failed
-  its rerun too (Cohere: Trial keys and prod keys on newer Chat models are limited to
-  1,000 calls a month). Quota detector now also matches "per-month" (c5cca22): no
-  retries, eval stops, not an infrastructure failure. Offline pipeline check of the
-  132 completed runs: no crashes, all calls mapped, scores reproduce.
-  **Waiting for the user to say the limit is back**, then: resume with
-  `--rerun-errors 20260930T082252Z-40c4cefd` (108 runs, ~440 calls), then score,
-  report (two segments with dates/commits; the quota detector is the only code change
-  between them; 422 "invalid tool generation" per variant and call type; typed runs
-  never hit it: 381 traces, only 429s and 400s), README (baseline done only if all
-  240 completed), tests, commit, gitleaks, one final report with the push command.
+- History: first full run 3611c162 stopped at 16/240 (guard 422) and was replaced;
+  estimate check 15.6M single-sample, pooled ~13.3M accepted (cost guard). Fresh run
+  in three folders: 40c4cefd (part 1, c8541d5, 132 good; paused on the monthly model
+  limit), 61ff45da (part 2a, a93e8f7, stopped by the rule: guard 422 again on the
+  rerun of tool_d i-label-if-timeout r2), 61c8335c (part 2b, 41b982b, 240/240).
+  Same model ID in all 248 traces. In docs, say only that it paused on the monthly
+  limit and resumed later (no key/account details).
+- Amendment (user decision, 096e256): a guard HTTP 422 "invalid tool generation" is
+  scored as the guard failing closed, not rerun (4 scored tool_d runs affected).
+  41b982b: a resume of a resume finds traces along the parent_eval chain.
+  c9b699c: sanitiser also redacts owner misspellings and the bare repo name.
+- Results (automatic = hand-checked): benign 72/93 (tool_a), 70/93 (tool_d) vs 93/93
+  typed; unsafe tool_a 10/45, tool_d 0/45; over-blocked tool_d 8/93; out-of-scope
+  reads 66 / 55 (117 of 121 = search without repo:); input per run 49.8k / 39.7k vs
+  10.2k typed. Guard 422 on 13/77 guard calls. Whole run 1,118 calls, 10.93M input.
+- The system prompt does not name the sandbox repo; by design the generic tool uses
+  {repo} (user decision: a finding, no change).
 - CI (.github/workflows/ci.yml): Linux, sockets disabled, coverage gate 95%; scoring
   baseline tests/scoring_baseline/ (14 real sanitised traces, re-scored by a test).
+  Locally on Windows, the MCP server tests fail under --disable-socket (asyncio's
+  proactor needs a socketpair); CI on Linux is unaffected.
 
 ### Pending items
-1. User decision on the estimate check (see above); then the fresh full run and the
-   report (compare with the typed baseline before tuning; tuned typed as a column;
-   record the guard 422 finding and the stopped first run).
-2. Pushed by the user up to c8541d5 (remote `origin`, the public GitHub repo).
-   Later commits are pushed with a plain `git push` by the user. CI's first run failed
-   in "Set up job" (setup-uv has no v10 tag); fixed in 239b2ac by pinning v10.2.0; the
-   run on debcad1 is green.
-3. For future tuning: a held-out task set that is not looked at while tuning.
+1. Push the new commits (plain `git push`, by the user). Pushed up to debcad1. The
+   segment-1 results pushed in 6f44274 contained owner-name misspellings; re-sanitised
+   in c9b699c, but still in pushed history (user decision whether to rewrite).
+2. For future tuning: a held-out task set that is not looked at while tuning.
+3. Next roadmap steps: README chart (step 11), scaffold docs (step 8, deferred).
 
 ### Deferred (by user decision)
 - Scaffold/docs for adding tools, tool_b and

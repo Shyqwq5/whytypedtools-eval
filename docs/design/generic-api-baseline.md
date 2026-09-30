@@ -232,7 +232,10 @@ configurations, all committed before any generic run:
 3. Full run: 40 tasks × 3 runs × {tool_a, tool_d}, dry-run. The first full run
    (`20260930T073700Z-3611c162`) was stopped by the infrastructure-failure rule at
    16/240 (the guard 422 above) and is replaced by a fresh run after the JSON-output
-   change and a new 16-run verification.
+   change and a new 16-run verification. The fresh run completed 240/240 in three
+   parts (paused on Cohere's monthly model limit, resumed later the same day; one
+   stop by the infrastructure-failure rule, then the amendment below):
+   [report](../../results/20260930T094121Z-61c8335c/report.md).
 
 ### Infrastructure failures (fixed 2026-09-30, before the verification rerun and any full-run result)
 
