@@ -200,12 +200,15 @@ class CohereModel:
         clock: Callable[[], float] = time.monotonic,
         rng: random.Random | None = None,
         pacer: Pacer | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> None:
         self._client = client
         self.model = model
         self.temperature = temperature
         self.seed = seed
         self.thinking = thinking
+        # e.g. {"type": "json_object"} for the LLM guard; None = not sent.
+        self.response_format = response_format
         self.max_retries = max_retries
         # Client-side pacing: at least this long between request starts (0 = off).
         self.min_interval_s = min_interval_s
@@ -226,6 +229,7 @@ class CohereModel:
             "temperature": self.temperature,
             "seed": self.seed,
             "thinking": self.thinking,
+            "response_format": self.response_format,
             "sdk_version": cohere.__version__,
         }
 
@@ -242,6 +246,8 @@ class CohereModel:
             request["seed"] = self.seed
         if self.thinking is not None:
             request["thinking"] = {"type": self.thinking}
+        if self.response_format is not None:
+            request["response_format"] = self.response_format
         # allow_tools=False sends nothing extra: see the module docstring.
 
         retries: list[Retry] = []

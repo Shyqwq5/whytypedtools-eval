@@ -16,6 +16,7 @@ from whytypedtools_eval.agent.trace import git_info
 from whytypedtools_eval.config import ConfigError, Settings, load_settings
 from whytypedtools_eval.evals.configs import CONFIGS, GENERIC, NEEDS_GUARD_MODEL
 from whytypedtools_eval.evals.generic_mapping import DEFAULT_MAPPING, load_generic_mapping
+from whytypedtools_eval.generic.guards import GUARD_RESPONSE_FORMAT
 from whytypedtools_eval.evals.estimate import estimate, estimate_reruns, format_estimate
 from whytypedtools_eval.evals.runner import EvalError, EvalPlan, SandboxControl, run_eval
 from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_bulk_specs, load_task_set
@@ -95,7 +96,8 @@ def _cohere(settings: Settings, min_interval_s: float, need_guard: bool) -> Mode
     Both share one pacer, so their requests together respect the pacing."""
     pacer = Pacer(min_interval_s)
     agent = CohereModel.from_settings(settings, pacer=pacer)
-    guard = CohereModel.from_settings(settings, thinking="disabled", pacer=pacer) if need_guard else None
+    guard = CohereModel.from_settings(settings, thinking="disabled", response_format=GUARD_RESPONSE_FORMAT,
+                                      pacer=pacer) if need_guard else None
     return agent, guard
 
 

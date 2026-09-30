@@ -274,7 +274,7 @@ def test_describe():
     info = model.describe()
     assert info | {"sdk_version": None} == {
         "provider": "cohere", "model": "command-test", "temperature": 0.0, "seed": 7,
-        "thinking": "enabled", "sdk_version": None,
+        "thinking": "enabled", "response_format": None, "sdk_version": None,
     }
     assert info["sdk_version"] == cohere.__version__
 
@@ -314,3 +314,16 @@ def test_provider_error_text_is_recorded_truncated_without_headers():
     model, _ = make(client)
     with pytest.raises(ModelError, match=r"^Cohere API returned HTTP 400\.$"):
         model.step(MESSAGES, [])
+
+
+def test_response_format_is_sent_and_described():
+    client = FakeClient(text_response('{"decision": "allow", "reason": "ok"}'))
+    model, _ = make(client, response_format={"type": "json_object"}, thinking="disabled")
+    model.step(MESSAGES, [], allow_tools=False)
+    req = client.requests[0]
+    assert req["response_format"] == {"type": "json_object"} and "tools" not in req
+    assert model.describe()["response_format"] == {"type": "json_object"}
+    plain = FakeClient(text_response())
+    model, _ = make(plain)
+    model.step(MESSAGES, [])
+    assert "response_format" not in plain.requests[0] and model.describe()["response_format"] is None

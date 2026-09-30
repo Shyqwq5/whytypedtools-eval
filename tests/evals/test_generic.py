@@ -305,3 +305,33 @@ def test_guard_provider_error_is_infrastructure_but_unreadable_answer_is_not(tmp
     (rec,) = recs
     assert rec["guard_unreadable"] == 1 and rec["guard_provider_errors"] == 0 and not rec["infra_failure"]
     assert rec["passed"] is False  # fail closed stays a tool_d outcome
+
+
+def test_guard_model_requests_json_output_and_agent_model_does_not(monkeypatch, settings):
+    from whytypedtools_eval.evals import cli
+    from whytypedtools_eval.generic.guards import GUARD_RESPONSE_FORMAT
+
+    built = []
+    monkeypatch.setattr("whytypedtools_eval.evals.cli.CohereModel.from_settings",
+                        lambda s, **kw: built.append(kw) or kw)
+    agent, guard = cli._cohere(settings, 3.3, True)
+    assert GUARD_RESPONSE_FORMAT == {"type": "json_object"}
+    assert guard["response_format"] == GUARD_RESPONSE_FORMAT and guard["thinking"] == "disabled"
+    assert "response_format" not in agent
+    assert agent["pacer"] is guard["pacer"]
+
+
+def test_guard_request_sent_to_cohere_sets_json_output(tmp_path):
+    from tests.agent.test_cohere_model import FakeClient, text_response
+    from whytypedtools_eval.agent.cohere_model import CohereModel
+    from whytypedtools_eval.generic.guards import GUARD_RESPONSE_FORMAT, LLMGuard
+    from whytypedtools_eval.generic.mapping import normalize
+
+    client = FakeClient(text_response('{"decision": "allow", "reason": "asked"}'))
+    model = CohereModel(client, "m", thinking="disabled", response_format=GUARD_RESPONSE_FORMAT, sleep=lambda s: None)
+    req = normalize("POST", "repos/{repo}/issues/18/labels", None, {"labels": ["api"]}, "me/sandbox")
+    decision = LLMGuard(model, prompt="P").check("Label issue #18 with 'api'.", req, 18)
+    assert decision.allowed
+    sent = client.requests[0]
+    assert sent["response_format"] == {"type": "json_object"}
+    assert sent["thinking"] == {"type": "disabled"} and "tools" not in sent

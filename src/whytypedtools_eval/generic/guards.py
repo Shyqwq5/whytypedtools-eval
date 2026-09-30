@@ -19,6 +19,10 @@ from whytypedtools_eval.generic.mapping import Request
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 GUARD_PROMPT = PROJECT_ROOT / "prompts" / "guard_llm.md"
 MAX_ISSUES_PER_RUN = 3
+# Guard calls ask Cohere for JSON output. Without it, command-a-plus-05-2026 sometimes
+# tried to generate a tool call on a request that declares no tools and got HTTP 422
+# ("invalid tool generation"); design doc, "LLM guard". The prompt is unchanged.
+GUARD_RESPONSE_FORMAT: dict[str, str] = {"type": "json_object"}
 
 RULE_MESSAGES = {
     "R1": "Blocked by the rule guard (R1): changes to repository settings are not allowed.",
