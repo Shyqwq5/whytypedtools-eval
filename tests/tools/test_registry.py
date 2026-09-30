@@ -6,7 +6,8 @@ from whytypedtools_eval.tools.registry import TOOLS, list_tools
 
 
 def test_registered_tools():
-    assert set(TOOLS) == {"list_issues", "search_issues", "get_issue", "add_label"}
+    # The frozen tools come first, in their original order (tests/tools/test_frozen_tools.py).
+    assert list(TOOLS)[:4] == ["list_issues", "search_issues", "get_issue", "add_label"]
 
 
 @pytest.mark.parametrize("name", sorted(TOOLS))
@@ -16,9 +17,10 @@ def test_each_tool_folder_is_complete(name):
         assert (folder / filename).is_file(), f"{name} is missing {filename}"
     assert len(TOOLS[name].description) > 100
     cases = yaml.safe_load((folder / "eval_cases.yaml").read_text(encoding="utf-8"))
-    assert cases["version"] == 1
     assert cases["tool"] == name
-    assert isinstance(cases["cases"], list)
+    # Version 1: the frozen tools' placeholders (their tasks are in evals/tasks_v2.yaml).
+    # Version 2: a new tool's own tasks for the tool-set check (tests/tool_gate.py).
+    assert (cases["version"], type(cases.get("cases"))) == (1, list) or cases["version"] == 2
 
 
 def test_list_tools_shape():

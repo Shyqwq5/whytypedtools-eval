@@ -14,7 +14,16 @@ from whytypedtools_eval.agent.loop import DEFAULT_MAX_TOOL_CALLS, DEFAULT_TRACE_
 from whytypedtools_eval.agent.model import ChatModel
 from whytypedtools_eval.agent.trace import git_info
 from whytypedtools_eval.config import ConfigError, Settings, load_settings
-from whytypedtools_eval.evals.configs import CONFIGS, GENERIC, NEEDS_GUARD_MODEL
+from whytypedtools_eval.evals.configs import (
+    CONFIGS,
+    GENERIC,
+    NEEDS_GUARD_MODEL,
+    TOOL_E_TOOLS,
+    is_typed,
+    toolset_config,
+)
+from whytypedtools_eval.evals.toolset import toolset_task_set
+from whytypedtools_eval.tools import registry
 from whytypedtools_eval.evals.generic_mapping import DEFAULT_MAPPING, load_generic_mapping
 from whytypedtools_eval.generic.guards import GUARD_RESPONSE_FORMAT
 from whytypedtools_eval.evals.estimate import estimate, estimate_reruns, format_estimate
@@ -76,6 +85,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--estimate", action="store_true", help="Only print the expected cost; call no API.")
     p.add_argument("--max-tool-calls", type=int, default=DEFAULT_MAX_TOOL_CALLS)
     p.add_argument("--tasks-file", type=Path, default=DEFAULT_TASKS)
+    p.add_argument("--toolset", nargs="+", metavar="TOOL",
+                   help="Tool-set check: run tool_e plus these newly registered tools on the v2 tasks and the "
+                        "tools' own eval_cases.yaml tasks (replaces --configs and --tasks-file). Pass it again "
+                        "with --rerun-errors. See scripts/toolset_check.py.")
     p.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     p.add_argument("--trace-dir", type=Path, default=DEFAULT_TRACE_DIR)
     p.add_argument("--max-model-rpm", type=float, metavar="N", default=DEFAULT_MAX_MODEL_RPM,
@@ -147,7 +160,19 @@ def main(
     if args.runs < 1 or args.max_tool_calls < 0:
         print("error: --runs must be >= 1 and --max-tool-calls >= 0", file=sys.stderr)
         return 2
-    task_set = load_task_set(args.tasks_file)
+    if args.toolset:
+        bad = [t for t in args.toolset if t not in registry.TOOLS or t in TOOL_E_TOOLS]
+        if bad:
+            print(f"error: --toolset takes registered tools outside tool_e: {', '.join(bad)}", file=sys.stderr)
+            return 2
+        try:
+            task_set = toolset_task_set(args.toolset)
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        args.configs = [toolset_config(args.toolset)]
+    else:
+        task_set = load_task_set(args.tasks_file)
     tasks = task_set.tasks
     if args.tasks:
         unknown = set(args.tasks) - {t.id for t in tasks}
@@ -225,7 +250,9 @@ def main(
             return 0
         print(f"plan: task set {task_set.name}, {len(tasks)} task(s) x {args.runs} run(s) x {', '.join(args.configs)}; "
               f"mode {'live' if args.live else 'dry-run'}")
-        print(format_estimate(estimate(tasks, args.configs, args.runs, args.results_dir)))
+        # A tool set has no cost history of its own; tool_e's measured costs stand in.
+        history_configs = ["tool_e" if is_typed(c) else c for c in args.configs]
+        print(format_estimate(estimate(tasks, list(dict.fromkeys(history_configs)), args.runs, args.results_dir)))
         return 0
 
     try:

@@ -101,3 +101,41 @@ tuned typed eval `20260930T002252Z-1d0367af` (`tests/tools/frozen_tools.json`).
 `tool_e` is now pinned to those four tools (`configs.TOOL_E_TOOLS`): before, it used
 the whole registry, so registering a fifth tool would have silently changed what
 `tool_e` means. A new tool is evaluated as `tool_e+<name>`.
+
+**Tasks for a new tool** (`eval_tasks`, part of the gate): a frozen tool must have a v2
+task expecting it. A new tool's `eval_cases.yaml` (version 2, the task schema of
+`evals/tasks_v2.yaml`) must declare `overlaps:` (the registered tool it is most easily
+confused with) and contain a functional task expecting it, a `tool_selection` pair
+(one task expecting it, one expecting the overlapped tool), and, if it writes, a
+dangerous and an injection task. Referenced seed keys must exist; benign tasks need
+`min_tool_calls`.
+
+## 3. The tool-set check
+
+A new tool can pass the gate and still change what the agent does on tasks it was
+never meant for. The tool-set check measures that.
+
+- **Offline part (CI):** the whole suite, including the scoring baseline (14 real
+  traces must re-score unchanged) and the frozen-tools test (tool_e stays the four
+  frozen tools whatever is registered).
+- **Model part (a script, not CI):** `scripts/toolset_check.py` runs configuration
+  `tool_e+<new tools>` (the frozen four plus the new ones, in registration order) on
+  the 40 v2 tasks plus the new tools' own tasks, 3 runs each, dry-run, with the same
+  model, system prompt and tool budget, and compares every shared task with the
+  current typed results (`20260930T002252Z-1d0367af`, the eval the frozen hashes come
+  from). Per task: first-tool distribution, pass rate, pass rate without the tool and
+  argument checks, unsafe runs, mean tool calls and input tokens, with flags for a
+  changed tool choice, any use of the new tool, a pass-rate change, more unsafe runs,
+  and a cost change over 20%. The new tools' own tasks are reported on their own.
+  Output: `results/<eval-id>/toolset_report.md`.
+- **Reading it:** a pass-rate drop while "without the tool/argument checks" stays the
+  same means the agent answered correctly with the new tool where a v2 task expects
+  an existing one. Then either the new tool is a legitimate alternative (the task's
+  expectation changes, which needs a new task-set version) or it is a confusion (the
+  new tool's description needs work). The check shows it; it does not decide it.
+- **Cost:** 120 v2 runs plus 3 per new task; about 350 Command A+ calls plus the new
+  tasks (a third of the monthly cap). `scripts/toolset_check.py` without `--run`
+  prints the plan and the estimate and calls nothing; `--run` needs the owner's
+  go-ahead. The combined task set (`evals.toolset.toolset_task_set`) has a stable
+  hash over the v2 file and each `eval_cases.yaml`, so an interrupted run resumes with
+  `scripts/run_eval.py --toolset <tools> --rerun-errors <eval-id>`.

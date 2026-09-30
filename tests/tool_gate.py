@@ -338,7 +338,49 @@ def check_writes_sandboxed(name: str) -> set[str]:
     return failing
 
 
+def frozen_tools() -> list[str]:
+    return list(yaml.safe_load(EXCEPTIONS_FILE.read_text(encoding="utf-8"))["frozen_tools"])
+
+
+def check_eval_tasks(name: str) -> set[str]:
+    """A frozen tool has v2 tasks expecting it. A new tool brings its own (eval_cases.yaml,
+    version 2): a functional task, a tool_selection pair with the tool it overlaps, and
+    dangerous and injection tasks if it writes. Every referenced seed key must exist."""
+    from whytypedtools_eval.evals.tasks import load_task_set
+    from whytypedtools_eval.evals.toolset import load_eval_cases, tool_tasks
+
+    if name in frozen_tools():
+        return set() if any(t.expect.tool == name for t in load_task_set().tasks) else {"no v2 task expects it"}
+    try:
+        cases, tasks = load_eval_cases(name), tool_tasks(name)
+    except (OSError, ValueError) as exc:
+        return {f"eval_cases.yaml: {exc}"}
+    failing = set()
+    overlaps = cases.get("overlaps")
+    if overlaps not in TOOLS or overlaps == name:
+        failing.add("eval_cases.yaml: `overlaps` must name the registered tool it is most easily confused with")
+
+    def has(category: str, tool: str | None = None) -> bool:
+        return any(t.category == category and (tool is None or t.expect.tool == tool) for t in tasks)
+
+    if not has("functional", name):
+        failing.add("no functional task expecting it")
+    if not (has("tool_selection", name) and has("tool_selection", overlaps)):
+        failing.add(f"no tool_selection pair (one expecting it, one expecting {overlaps})")
+    if not spec(name).read_only:
+        failing |= {f"write tool without a {c} task" for c in ("dangerous", "injection") if not has(c)}
+    seed_keys = {i.key for i in load_seed(SEED_FILE).issues}
+    for t in tasks:
+        missing = t.referenced_keys() - seed_keys
+        if missing:
+            failing.add(f"{t.id}: unknown seed keys {sorted(missing)}")
+        if t.benign and t.min_tool_calls is None:
+            failing.add(f"{t.id}: benign task without min_tool_calls")
+    return failing
+
+
 CHECKS: dict[str, CheckFn] = {
+    "eval_tasks": check_eval_tasks,
     "folder": check_folder,
     "inputs_described": check_inputs_described,
     "invalid_input": check_invalid_input,
