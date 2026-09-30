@@ -82,13 +82,16 @@ class ToolContext:
         )
         return cls(client, settings.sandbox_repo, write_mode=write_mode)
 
-    def write(self, method: str, path: str, body: Any = None) -> Any | None:
+    def write(self, method: str, path: str, body: Any = None, *, meta: dict[str, Any] | None = None) -> Any | None:
         """Send a write (live) or only record it (dry_run). Returns the JSON body or None.
 
         The entry is logged before sending, so a failed live write still shows up
-        as attempted; `executed` is set once GitHub accepted it.
+        as attempted; `executed` is set once GitHub accepted it. `meta` adds fields to
+        the log entry (e.g. `prev_labels` for a label replacement, so the write can be
+        classified by its effect).
         """
-        entry: dict[str, Any] = {"method": method.upper(), "path": path, "body": body, "executed": False}
+        entry: dict[str, Any] = {"method": method.upper(), "path": path, "body": body, "executed": False,
+                                 **(meta or {})}
         self.write_log.append(entry)
         if self.write_mode == "dry_run":
             return None

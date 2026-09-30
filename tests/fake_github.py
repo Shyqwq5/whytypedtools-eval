@@ -238,6 +238,9 @@ class FakeGitHub:
     def _search(self, request: httpx.Request) -> httpx.Response:
         params = dict(request.url.params)
         tokens = _SEARCH_TOKEN.findall(params.get("q", ""))
+        if not any(t.lower() in ("is:issue", "is:pull-request", "is:pr", "type:issue", "type:pr") for t in tokens):
+            # Real API behaviour (observed 2026-09-30).
+            return httpx.Response(422, json={"message": "Query must include 'is:issue' or 'is:pull-request'"})
         operators = sum(1 for t in tokens if t in ("AND", "OR", "NOT"))
         if operators > 5:
             return httpx.Response(422, json={
