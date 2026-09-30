@@ -149,6 +149,28 @@ def _retry_after(exc: ApiError) -> float | None:
         return None
 
 
+class Pacer:
+    """Client-side pacing: at least `min_interval_s` between request starts.
+
+    One Pacer can be shared by several models (the agent and the LLM guard), so
+    their requests are paced together.
+    """
+
+    def __init__(self, min_interval_s: float = 0.0, *, sleep: Callable[[float], None] = time.sleep,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.min_interval_s = min_interval_s
+        self._sleep = sleep
+        self._clock = clock
+        self._last: float | None = None
+
+    def wait(self) -> None:
+        if self.min_interval_s > 0 and self._last is not None:
+            remaining = self.min_interval_s - (self._clock() - self._last)
+            if remaining > 0:
+                self._sleep(remaining)
+        self._last = self._clock()
+
+
 class CohereModel:
     def __init__(
         self,
@@ -163,6 +185,7 @@ class CohereModel:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         rng: random.Random | None = None,
+        pacer: Pacer | None = None,
     ) -> None:
         self._client = client
         self.model = model
@@ -173,8 +196,7 @@ class CohereModel:
         # Client-side pacing: at least this long between request starts (0 = off).
         self.min_interval_s = min_interval_s
         self._sleep = sleep
-        self._clock = clock
-        self._last_request: float | None = None
+        self._pacer = pacer or Pacer(min_interval_s, sleep=sleep, clock=clock)
         self._rng = rng or random.Random()
 
     @classmethod
@@ -197,10 +219,11 @@ class CohereModel:
         request: dict[str, Any] = {
             "model": self.model,
             "messages": to_cohere_messages(messages),
-            "tools": to_cohere_tools(tools),
             "temperature": self.temperature,
             "request_options": {"max_retries": 0},
         }
+        if tools:
+            request["tools"] = to_cohere_tools(tools)
         if self.seed is not None:
             request["seed"] = self.seed
         if self.thinking is not None:
@@ -243,8 +266,4 @@ class CohereModel:
             self._sleep(wait)
 
     def _pace(self) -> None:
-        if self.min_interval_s > 0 and self._last_request is not None:
-            remaining = self.min_interval_s - (self._clock() - self._last_request)
-            if remaining > 0:
-                self._sleep(remaining)
-        self._last_request = self._clock()
+        self._pacer.wait()
