@@ -43,8 +43,8 @@ against a generic GitHub API tool (with rule-based and LLM guardrails).
 6. First eval round, multiple runs per task.  (done: results/20260929T221449Z-c74f1261/report.md)
 7. Failure analysis -> tune descriptions/prompts -> second round. Record before/after.  (round 1 done)
 8. "How to add a tool" docs + scaffold command.
-9. CI: coverage checks + baseline comparison.
-10. Generic API control experiment (tool_a, tool_d first; b/c later).
+9. CI: coverage checks + baseline comparison.  (done)
+10. Generic API control experiment (tool_a, tool_d first; b/c later).  <- in progress
 11. README with metrics tables and safety-vs-usability chart.
 
 ## Two repositories
@@ -128,7 +128,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-30, tuning round 1 done)
+## Status / handoff (updated 2026-09-30, generic baseline built; full run waiting on a guard decision)
 
 ### Where things stand
 - Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
@@ -223,11 +223,26 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 - The hand-check rule was written after verification rounds that showed the same
   contrast pattern; it only ever helped the tuned side (stated in the report).
 
+### Generic API baseline (built; full run stopped by the rule)
+- Rules fixed before any run in docs/design/generic-api-baseline.md: sandbox
+  protections, response cap 48,000 chars (from step 0), truncation at item boundaries,
+  R1-R4 with exact messages (R4: 4th distinct issue), LLM guard (thinking disabled,
+  prompts/guard_llm.md), scoring mapping evals/generic_mapping_v2.yaml, and the
+  infrastructure-failure rule (rerun once, stop on a second provider error).
+- Verification rerun 20260930T073146Z-0ec4a81d: all five checks passed; estimate 8.6M.
+- Full run 20260930T073700Z-3611c162 stopped at 16/240: the LLM guard gets HTTP 422
+  "invalid tool generation" from Cohere on some inputs (no tools declared).
+  Reproduced deterministically; JSON response format or thinking enabled avoids it.
+  **Waiting for the user's decision** on the guard call setup before resuming with
+  --rerun-errors.
+- CI (.github/workflows/ci.yml): Linux, sockets disabled, coverage gate 95%; scoring
+  baseline tests/scoring_baseline/ (14 real sanitised traces, re-scored by a test).
+
 ### Pending items
-1. Build the generic API baseline (tool_a, tool_d) per
-   `docs/design/generic-api-baseline.md`; same scorer and hand-check rule.
-2. For future tuning: a held-out task set that is not looked at while tuning.
-3. Push the main repo to GitHub (`whytypedtools-eval`, public) once the user is ready.
+1. User decision on the guard call (see above); then resume the full run and write the
+   report (compare with the typed baseline before tuning; tuned typed as a column).
+2. Push: the user runs it (nothing pushed yet). Consider the author email first.
+3. For future tuning: a held-out task set that is not looked at while tuning.
 
 ### Deferred (by user decision)
 - Scaffold/docs for adding tools, CI coverage and baseline gating, tool_b and
