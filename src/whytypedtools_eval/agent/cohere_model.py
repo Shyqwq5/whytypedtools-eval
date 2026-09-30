@@ -141,6 +141,20 @@ def _is_quota_exhausted(exc: ApiError) -> bool:
     return exc.status_code == 429 and "/ month" in message.replace("/month", "/ month")
 
 
+PROVIDER_TEXT_MAX_CHARS = 200
+
+
+def _provider_text(exc: ApiError) -> str:
+    """Cohere's own error message (the body's `message` field only, never headers),
+    whitespace-collapsed and truncated. Traces redact secrets and results/ files pass
+    through the results sanitiser, like every other field."""
+    body = exc.body if isinstance(exc.body, dict) else {}
+    text = " ".join(str(body.get("message", "")).split())
+    if len(text) > PROVIDER_TEXT_MAX_CHARS:
+        text = text[:PROVIDER_TEXT_MAX_CHARS] + "…"
+    return text
+
+
 def _retry_after(exc: ApiError) -> float | None:
     headers = {k.lower(): v for k, v in (exc.headers or {}).items()}
     try:
@@ -239,18 +253,22 @@ class CohereModel:
                 status = exc.status_code
                 if _is_quota_exhausted(exc):
                     raise ModelError(QUOTA_MESSAGE, status=status, retries=retries, fatal=True) from None
+                provider = _provider_text(exc)
                 if status not in RETRYABLE_STATUSES:
-                    raise ModelError(f"Cohere API returned HTTP {status}.", status=status, retries=retries) from None
+                    detail = f": {provider}" if provider else "."
+                    raise ModelError(f"Cohere API returned HTTP {status}{detail}", status=status,
+                                     retries=retries) from None
                 reason = f"http_{status}"
                 hinted = _retry_after(exc)
             except httpx.TransportError as exc:
-                status, reason, hinted = None, type(exc).__name__, None
+                status, reason, hinted, provider = None, type(exc).__name__, None, ""
             else:
                 return dataclasses.replace(parse_response(resp), retries=retries)
 
             if len(retries) >= self.max_retries:
+                detail = f"; last error: {provider}" if provider else ""
                 raise ModelError(
-                    f"Cohere API still failing after {len(retries)} retries ({reason}).",
+                    f"Cohere API still failing after {len(retries)} retries ({reason}){detail}.",
                     status=status,
                     retries=retries,
                 )

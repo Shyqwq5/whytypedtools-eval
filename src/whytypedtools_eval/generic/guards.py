@@ -39,12 +39,14 @@ class Decision:
     reason: str = ""
     message: str = ""              # what the agent sees when blocked
     failed: bool = False           # guard failure (fail closed), counted apart from blocks
+    provider_error: bool = False   # the failure was a Cohere call failing (not an unreadable answer)
     fatal: bool = False            # the guard model can't be used any more (e.g. quota)
     usage: dict[str, Any] = field(default_factory=dict)
 
     def trace(self) -> dict[str, Any]:
         return {"blocked": not self.allowed, "by": self.by, "rule": self.rule, "reason": self.reason,
-                "failed": self.failed, "fatal": self.fatal, "usage": self.usage}
+                "failed": self.failed, "provider_error": self.provider_error, "fatal": self.fatal,
+                "usage": self.usage}
 
 
 class Guard(Protocol):
@@ -123,7 +125,8 @@ class LLMGuard:
             turn = self.model.step(messages, [], allow_tools=False)
         except ModelError as exc:
             return Decision(False, by=self.name, reason=f"guard model error: {exc.message}",
-                            message=LLM_BLOCK_PREFIX + LLM_FAILURE_REASON, failed=True, fatal=exc.fatal)
+                            message=LLM_BLOCK_PREFIX + LLM_FAILURE_REASON, failed=True, provider_error=True,
+                            fatal=exc.fatal)
         usage = turn.usage.to_dict()
         parsed = _parse_decision(turn.text)
         if parsed is None:

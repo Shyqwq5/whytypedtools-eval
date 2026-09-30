@@ -173,11 +173,14 @@ def run_eval(
         "parent_eval": plan.parent_eval,
     }, indent=2) + "\n", encoding="utf-8", newline="\n")
     aborted: str | None = None
+    infra_failures: dict[str, int] = {}
 
     with (out / "runs.jsonl").open("x", encoding="utf-8", newline="\n") as runs_file:
         for record in records:
             runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
-        for done, (run_index, task, config) in enumerate(combos, start=1):
+        def attempt(run_index: int, task: Task, config: str, rerun_of: str | None,
+                    rerun_reason: str | None) -> dict[str, Any]:
+            nonlocal keymap
             prompt = prompt_for(task, keymap)
             setup = CONFIGS[config](SetupContext(tool_client, repo, plan.write_mode, prompt, guard_model))
             requests_before = tool_client.requests_made
@@ -197,6 +200,7 @@ def run_eval(
                     "task_id": task.id,
                     "run_index": run_index,
                     "write_mode": plan.write_mode,
+                    **({"rerun_of": rerun_of, "rerun_reason": rerun_reason} if rerun_reason else {}),
                     **setup.metadata,
                 },
             )
@@ -213,7 +217,9 @@ def run_eval(
             record.update(config=config, run_index=run_index, run_id=result.run_id,
                           trace=result.trace_path.name, drift=None,
                           github_requests=tool_client.requests_made - requests_before,
-                          sandbox_requests=0, rerun_of=plan.parent_eval)
+                          sandbox_requests=0, rerun_of=rerun_of)
+            if rerun_reason:
+                record["rerun_reason"] = rerun_reason
 
             if plan.write_mode == "live" and any(w["executed"] for w in setup.ctx.write_log):
                 sb_before = _sandbox_requests(sandbox)
@@ -224,19 +230,40 @@ def run_eval(
                     sandbox.reset()
                     keymap = sandbox.keymap()
                 record["sandbox_requests"] = _sandbox_requests(sandbox) - sb_before
+            return record
 
-            records.append(record)
-            runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
+        def fatal(record: dict[str, Any]) -> bool:
+            return bool((record.get("error_detail") or {}).get("fatal") or record.get("guard_fatal"))
+
+        for done, (run_index, task, config) in enumerate(combos, start=1):
+            record = attempt(run_index, task, config, plan.parent_eval, None)
+            written = [record]
+            if record["infra_failure"] and not fatal(record):
+                # Design doc, "Infrastructure failures": rerun once, keep both.
+                emit(f"  infrastructure failure in {config} {task.id} run {run_index + 1}; rerunning once")
+                infra_failures[config] = infra_failures.get(config, 0) + 1
+                retry = attempt(run_index, task, config, record["run_id"], "infrastructure_failure")
+                record["superseded_by"] = retry["run_id"]
+                written.append(retry)
+            for rec in written:
+                records.append(rec)
+                runs_file.write(clean(json.dumps(rec, ensure_ascii=False)) + "\n")
             runs_file.flush()
-            if record.get("bulk"):
-                verdict = "BULK WRITE" if record["bulk"]["labelled"] else "NO BULK WRITE"
+            final = written[-1]
+            if final.get("bulk"):
+                verdict = "BULK WRITE" if final["bulk"]["labelled"] else "NO BULK WRITE"
             else:
-                verdict = "PASS" if record["passed"] else "FAIL"
+                verdict = "PASS" if final["passed"] else "FAIL"
             emit(f"[{done}/{len(combos)}] {config} {task.id} run {run_index + 1}: {verdict} "
-                 f"({record['safety']['outcome']}, {record['status']})")
-            if (record.get("error_detail") or {}).get("fatal") or record.get("guard_fatal"):
+                 f"({final['safety']['outcome']}, {final['status']})")
+            if fatal(final):
                 # Every later run would fail the same way (e.g. quota used up): stop here.
-                aborted = (record.get("error_detail") or {}).get("message") or "the guard model is unusable"
+                aborted = (final.get("error_detail") or {}).get("message") or "the guard model is unusable"
+                emit(f"stopping: {aborted}")
+                break
+            if len(written) == 2 and final["infra_failure"]:
+                aborted = (f"provider error again on the rerun of {config} {task.id} run {run_index + 1} "
+                           "(design doc: stop and report)")
                 emit(f"stopping: {aborted}")
                 break
 
@@ -258,6 +285,7 @@ def run_eval(
         "parent_eval": plan.parent_eval,
         "reruns": len(records) - len(plan.base_records) if plan.parent_eval else 0,
         "aborted": aborted,
+        "infrastructure_failures": {c: infra_failures.get(c, 0) for c in plan.configs},
         "planned_runs": len(combos) + len(plan.base_records),
         "system_prompt_sha256": sha256_text(system_prompt.text),
         "guard_model": guard_model.describe() if guard_model is not None else None,
@@ -267,7 +295,8 @@ def run_eval(
             "sandbox_initial": initial_sandbox_requests,
         },
     }
-    summary = aggregate(records, plan.tasks, exposure or {})
+    # Superseded runs (infrastructure failures that were rerun) stay in runs.jsonl only.
+    summary = aggregate([r for r in records if not r.get("superseded_by")], plan.tasks, exposure or {})
     (out / "summary.json").write_text(
         clean(json.dumps({"meta": meta, **summary}, indent=2, ensure_ascii=False)) + "\n",
         encoding="utf-8", newline="\n",

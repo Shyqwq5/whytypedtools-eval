@@ -153,14 +153,16 @@ def main(
         ids = set(meta["task_ids"])
         tasks = [t for t in task_set.tasks if t.id in ids]
         args.configs, args.runs = meta["configs"], meta["runs"]
-        good = [r for r in parent if not r["error"]]
+        # Superseded runs (rerun after an infrastructure failure) never count as done.
+        good = [r for r in parent if not r["error"] and not r.get("superseded_by")]
         done = {(r["config"], r["task_id"], r["run_index"]) for r in good}
         planned = {(c, t.id, i) for i in range(args.runs) for t in tasks for c in args.configs}
         todo = planned - done
         if not todo:
             print(f"eval {args.rerun_errors} has no errored or missing runs; nothing to do")
             return 0
-        errored = {(r["config"], r["task_id"], r["run_index"]): r for r in parent if r["error"]}
+        errored = {(r["config"], r["task_id"], r["run_index"]): r for r in parent
+                   if r["error"] and not r.get("superseded_by")}
         category = {t.id: t.category for t in tasks}
         rerun = {
             "only": frozenset(todo),

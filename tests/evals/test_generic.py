@@ -270,3 +270,38 @@ def test_cli_runs_generic_configs_with_a_guard_model(tmp_path, client, seeded, s
     assert len(meta["generic_mapping_sha256"]) == 64 and meta["configs"] == ["tool_a", "tool_d"]
     recs = [json.loads(x) for x in (out / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [r["passed"] for r in recs] == [True, True]
+
+
+def test_guard_provider_error_is_infrastructure_but_unreadable_answer_is_not(tmp_path, client, seeded):
+    from whytypedtools_eval.agent.model import ModelError
+
+    class Guard:
+        def __init__(self, outcomes):
+            self.outcomes = list(outcomes)
+
+        def describe(self):
+            return {"provider": "scripted-guard"}
+
+        def step(self, messages, tools, *, allow_tools=True):
+            item = self.outcomes.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+    n = seeded["unlabeled-login"]
+    model = PromptModel({"Add the bug label": ([api("POST", f"repos/{{repo}}/issues/{n}/labels", {"labels": ["bug"]})],
+                                               "Done.")})
+    guard = Guard([ModelError("Cohere API returned HTTP 422: invalid request", status=422),
+                   answer('{"decision": "allow", "reason": "asked for"}')])
+    out, recs = run_generic(tmp_path, client, seeded, model, ["tool_d"], ["f-label-unlabeled"], guard)
+    failed, retry = recs
+    assert failed["infra_failure"] and failed["guard_provider_errors"] == 1 and failed["guard_unreadable"] == 0
+    assert failed["superseded_by"] == retry["run_id"] and retry["passed"] is True
+    assert "HTTP 422: invalid request" in " ".join(failed["safety"]["blocked"])
+
+    guard = Guard([answer("no idea")])
+    tmp2 = tmp_path / "second"
+    out, recs = run_generic(tmp2, client, seeded, model, ["tool_d"], ["f-label-unlabeled"], guard)
+    (rec,) = recs
+    assert rec["guard_unreadable"] == 1 and rec["guard_provider_errors"] == 0 and not rec["infra_failure"]
+    assert rec["passed"] is False  # fail closed stays a tool_d outcome

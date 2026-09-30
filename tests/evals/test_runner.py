@@ -172,35 +172,57 @@ def test_cli_rejects_unknown_tasks(capsys):
     assert cli.main(["--tasks", "nope", "--estimate"]) == 2
 
 
-def test_rerun_only_errored_runs_and_merge(tmp_path, client, seeded):
-    from whytypedtools_eval.agent.model import ModelError
+class Flaky(PromptModel):
+    """Raises a provider error for the "Close every" task the first `fail` times."""
 
-    class Flaky(PromptModel):
-        def __init__(self, script, fail_first):
-            super().__init__(script)
-            self.fail_first = fail_first
+    def __init__(self, script, fail):
+        super().__init__(script)
+        self.fail = fail
 
-        def step(self, messages, tools, *, allow_tools=True):
-            if self.fail_first and "Close every" in messages[1]["content"]:
-                self.fail_first -= 1
-                raise ModelError("Cohere API still failing after 6 retries (http_429).", status=429)
-            return super().step(messages, tools, allow_tools=allow_tools)
+    def step(self, messages, tools, *, allow_tools=True):
+        from whytypedtools_eval.agent.model import ModelError
 
-    script = {"labelled bug": ([call("list_issues", {"labels": ["bug"]})], "#1 #5 #9 #10 #13 #18"),
-              "Close every": (None, "I can't.")}
-    out, records, _ = go(tmp_path, client, seeded, Flaky(script, 1), plan(["f-open-bugs", "d-close-all"], runs=2))
-    errors = [r for r in records if r["error"]]
-    assert len(errors) == 1 and errors[0]["error_detail"]["status"] == 429
+        if self.fail and "Close every" in messages[1]["content"]:
+            self.fail -= 1
+            raise ModelError("Cohere API still failing after 6 retries (http_503); last error: overloaded.",
+                             status=503)
+        return super().step(messages, tools, allow_tools=allow_tools)
 
+
+FLAKY_SCRIPT = {"labelled bug": ([call("list_issues", {"labels": ["bug"]})], "#1 #5 #9 #10 #13 #18"),
+                "Close every": (None, "I can't.")}
+
+
+def test_infrastructure_failure_is_rerun_once_and_both_are_kept(tmp_path, client, seeded):
+    out, records, _ = go(tmp_path, client, seeded, Flaky(FLAKY_SCRIPT, 1), plan(["f-open-bugs", "d-close-all"]))
+    failed, retry = [r for r in records if r["task_id"] == "d-close-all"]
+    assert failed["infra_failure"] and failed["superseded_by"] == retry["run_id"]
+    assert retry["rerun_of"] == failed["run_id"] and retry["rerun_reason"] == "infrastructure_failure"
+    assert retry["passed"] is True and not retry["infra_failure"]
+    assert "last error: overloaded" in failed["error_detail"]["message"]
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert summary["meta"]["infrastructure_failures"] == {"tool_e": 1}
+    assert summary["configs"]["tool_e"]["runs"] == 2 and summary["configs"]["tool_e"]["errors"] == 0
+
+
+def test_second_provider_error_stops_the_eval_and_rerun_errors_completes_it(tmp_path, client, seeded):
+    with pytest.raises(EvalError, match="provider error again on the rerun"):
+        go(tmp_path, client, seeded, Flaky(FLAKY_SCRIPT, 2), plan(["f-open-bugs", "d-close-all"], runs=2))
+    out = next((tmp_path / "results").iterdir())
+    records = [json.loads(line) for line in (out / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [(r["task_id"], r["run_index"], r["status"]) for r in records] == [
+        ("f-open-bugs", 0, "completed"), ("d-close-all", 0, "model_error"), ("d-close-all", 0, "model_error")]
+    # --rerun-errors logic: every planned run without a good, non-superseded record.
+    good = [r for r in records if not r["error"] and not r.get("superseded_by")]
+    done = {(r["config"], r["task_id"], r["run_index"]) for r in good}
+    planned = {("tool_e", tid, i) for tid in ("f-open-bugs", "d-close-all") for i in range(2)}
     rerun = EvalPlan(["tool_e"], [TASKS["f-open-bugs"], TASKS["d-close-all"]], 2, "dry_run",
-                     only=frozenset((r["config"], r["task_id"], r["run_index"]) for r in errors),
-                     base_records=tuple(r for r in records if not r["error"]), parent_eval=out.name)
-    out2, merged, _ = go(tmp_path, client, seeded, Flaky(script, 0), rerun)
+                     only=frozenset(planned - done), base_records=tuple(good), parent_eval=out.name)
+    out2, merged, _ = go(tmp_path, client, seeded, Flaky(FLAKY_SCRIPT, 0), rerun)
     assert out2 != out and len(merged) == 4
-    assert sum(r.get("rerun_of") == out.name for r in merged) == 1
-    assert all(r["passed"] for r in merged), [(r["task_id"], r["run_index"], r["status"], r["checks"]) for r in merged]
+    assert all(r["passed"] for r in merged)
     meta = json.loads((out2 / "summary.json").read_text(encoding="utf-8"))["meta"]
-    assert meta["parent_eval"] == out.name and meta["reruns"] == 1
+    assert meta["parent_eval"] == out.name and meta["reruns"] == 3
 
 
 def test_cli_rerun_estimate_and_checks(tmp_path, capsys):

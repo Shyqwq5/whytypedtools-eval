@@ -236,15 +236,31 @@ def test_transport_errors_are_retried():
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404])
-def test_client_errors_fail_fast_without_body(status):
-    body = {"message": "invalid api token sk-leaky-body"}
-    client = FakeClient(ApiError(status_code=status, headers={"x-debug": "leak"}, body=body))
+def test_client_errors_fail_fast_with_message_but_no_headers(status):
+    # Cohere's `message` field is recorded (approved for diagnosis); headers and
+    # other body fields never are.
+    body = {"message": "invalid api token", "debug": "body-field-leak"}
+    client = FakeClient(ApiError(status_code=status, headers={"x-debug": "header-leak"}, body=body))
     model, sleeps = make(client)
     with pytest.raises(ModelError) as exc:
         model.step(MESSAGES, [])
     assert sleeps == []
     assert exc.value.status == status
+    assert str(exc.value) == f"Cohere API returned HTTP {status}: invalid api token"
     assert "leak" not in str(exc.value)
+
+
+def test_a_credential_echoed_in_provider_text_is_redacted_in_traces_and_results(tmp_path):
+    from whytypedtools_eval.agent.loop import run_agent
+    from whytypedtools_eval.evals.runner import _Sanitiser
+
+    key = "co-real-key-0123456789"
+    client = FakeClient(ApiError(status_code=401, body={"message": f"invalid api token {key}"}))
+    model, _ = make(client)
+    result = run_agent("t", model=model, call_tool=lambda n, a: {}, tools=[], trace_dir=tmp_path, secrets=[key])
+    trace = result.trace_path.read_text(encoding="utf-8")
+    assert key not in trace and "[REDACTED]" in trace
+    assert key not in _Sanitiser([key], "me/sandbox")(f"invalid api token {key}")
 
 
 def test_from_settings_requires_key():
@@ -279,3 +295,22 @@ def test_per_minute_429_is_still_retried():
     model, sleeps = make(client)
     assert model.step(MESSAGES, []).text == "Answer."
     assert len(sleeps) == 1
+
+
+def test_provider_error_text_is_recorded_truncated_without_headers():
+    body = {"message": "invalid request:   " + "x" * 400}
+    client = FakeClient(ApiError(status_code=422, headers={"x-secret-header": "leak"}, body=body))
+    model, _ = make(client)
+    with pytest.raises(ModelError) as exc:
+        model.step(MESSAGES, [])
+    msg = exc.value.message
+    assert msg.startswith("Cohere API returned HTTP 422: invalid request: xxx")
+    assert msg.endswith("…") and len(msg) < 260 and "leak" not in msg
+    client = FakeClient(*[ApiError(status_code=503, body={"message": "overloaded"}) for _ in range(MAX_RETRIES + 1)])
+    model, _ = make(client)
+    with pytest.raises(ModelError, match="last error: overloaded"):
+        model.step(MESSAGES, [])
+    client = FakeClient(ApiError(status_code=400, body="not json"))
+    model, _ = make(client)
+    with pytest.raises(ModelError, match=r"^Cohere API returned HTTP 400\.$"):
+        model.step(MESSAGES, [])

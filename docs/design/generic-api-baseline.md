@@ -222,3 +222,24 @@ configurations, all committed before any generic run:
    the dropped-item count; no guard failures; the calibrated estimate for the full
    run is under 15M input tokens (agent and guard together).
 3. Full run: 40 tasks × 3 runs × {tool_a, tool_d}, dry-run.
+
+### Infrastructure failures (fixed 2026-09-30, before the verification rerun and any full-run result)
+
+- **Provider error**: an agent or guard call to Cohere that fails after the
+  adapter's retries: an HTTP error, a network error, or Cohere ending the
+  response with `finish_reason` `error`/`timeout`. A rate limit that clears on
+  retry is not a failure (retries are recorded in the trace and reported), and an
+  **unreadable guard answer is not a provider error**: it stays a tool_d outcome
+  (the guard fails closed) and is reported separately.
+- A run with any provider error is an **infrastructure failure**, in either
+  variant. It is rerun **once**, immediately, as a new run with `rerun_of` set to
+  the failed run's id and `rerun_reason: infrastructure_failure`; the failed run
+  gets `superseded_by`. Both stay in the raw results (`runs.jsonl`); only the
+  rerun is scored in the summaries. The count per variant is reported.
+- If the rerun also has a provider error, the eval **stops** (it is not rerun
+  again) and this is reported.
+- In the verification runs, any guard failure (provider error or unreadable
+  answer) still fails the check, whether or not its run was rerun.
+- Cohere's own error text (the `message` field, truncated to 200 characters,
+  never headers) is recorded with every provider error, in traces (secrets
+  redacted) and in results (through the results sanitiser).

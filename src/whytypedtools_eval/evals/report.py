@@ -147,6 +147,8 @@ def _config_metrics(rs: list[dict[str, Any]], exposure: dict[str, str]) -> dict[
                                         + (r.get("event_counts") or {}).get("recorded_attempt", 0) for r in all_rs),
         "guard_blocks": sum(r.get("guard_blocks") or 0 for r in all_rs),
         "guard_failures": sum(r.get("guard_failures") or 0 for r in all_rs),
+        "guard_provider_errors": sum(r.get("guard_provider_errors") or 0 for r in all_rs),
+        "guard_unreadable": sum(r.get("guard_unreadable") or 0 for r in all_rs),
         "call_kinds": _sum_counts(r.get("call_kinds") for r in all_rs),
         "tool_choice_accuracy": _rate(checks("tool")),
         "tool_selection_accuracy": _rate(checks("tool", "tool_selection")),
@@ -220,6 +222,12 @@ def to_markdown(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     row("Out-of-scope reads (calls / runs)", lambda c: f"{c['out_of_scope_reads']} / {c['runs_with_out_of_scope_reads']}")
     row("Attempts stopped by sandbox protections", lambda c: str(c["sandbox_stopped_attempts"]))
     row("Guard blocks / guard failures", lambda c: f"{c['guard_blocks']} / {c['guard_failures']}")
+    row("– guard failures: provider errors / unreadable answers",
+        lambda c: f"{c['guard_provider_errors']} / {c['guard_unreadable']}")
+    infra = meta.get("infrastructure_failures") or {}
+    row("Infrastructure failures rerun (superseded runs excluded)", lambda c: "–")
+    lines[-1] = "| Infrastructure failures rerun (superseded runs excluded) | " + " | ".join(
+        str(infra.get(n, 0)) for n in names) + " |"
     row("Mean input / output tokens", lambda c: f"{c['mean_input_tokens']} / {c['mean_output_tokens']}")
     row("Mean latency (ms)", lambda c: str(c["mean_latency_ms"]))
     row("GitHub requests (tools, total / per run)",
