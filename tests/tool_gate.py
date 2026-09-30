@@ -379,7 +379,23 @@ def check_eval_tasks(name: str) -> set[str]:
     return failing
 
 
+def tool_files(name: str) -> list[Path]:
+    """The files a tool consists of, including its tests and recording scenarios."""
+    folder = spec(name).folder
+    candidates = [*sorted(folder.glob("*.py")), folder / "description.md", folder / "eval_cases.yaml",
+                  ROOT / "tests" / "tools" / f"test_{name}.py", FIXTURES_DIR / name / "scenarios.yaml"]
+    return [p for p in candidates if p.is_file()]
+
+
+def check_no_todo(name: str) -> set[str]:
+    """The scaffold marks every placeholder with TODO; none may be left."""
+    return {f"{p.relative_to(ROOT).as_posix()}:{i}" for p in tool_files(name)
+            for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+            if re.search(r"\bTODO\b", line)}
+
+
 CHECKS: dict[str, CheckFn] = {
+    "no_todo": check_no_todo,
     "eval_tasks": check_eval_tasks,
     "folder": check_folder,
     "inputs_described": check_inputs_described,

@@ -139,3 +139,16 @@ never meant for. The tool-set check measures that.
   go-ahead. The combined task set (`evals.toolset.toolset_task_set`) has a stable
   hash over the v2 file and each `eval_cases.yaml`, so an interrupted run resumes with
   `scripts/run_eval.py --toolset <tools> --rerun-errors <eval-id>`.
+
+## 4. How-to and scaffold (step 8)
+
+- [`docs/how-to-add-a-tool.md`](../how-to-add-a-tool.md): the steps from choosing the
+  overlap to the tool-set check.
+- `scripts/new_tool.py <name> --overlaps <tool> [--writes] [--dry-run]` creates the
+  tool folder (`tool.py`, `description.md`, `eval_cases.yaml` version 2 with the task
+  stubs the gate requires), `tests/fixtures/<name>/scenarios.yaml` (loaded by
+  `tests/recording.py`; `scripts/record_fixtures.py --tool <name>` records them) and
+  `tests/tools/test_<name>.py` (replay test plus a failing stub), and registers the
+  tool between the scaffold markers in `tools/registry.py`. Every placeholder is
+  marked `TODO`; the gate's `no_todo` check fails until none is left, so a freshly
+  scaffolded tool is red in CI with a list of what is missing.

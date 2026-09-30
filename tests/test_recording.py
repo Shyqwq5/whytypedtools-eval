@@ -205,3 +205,19 @@ def test_recorded_search_pagination_is_clean_and_replays(mock_api):
     result, replayer = replay_call(mock_api, fixture)
     assert replayer.done
     assert result == fixture["result"]
+
+
+def test_scenario_files_are_loaded_per_tool_folder(tmp_path):
+    from tests.recording import load_scenario_files
+
+    (tmp_path / "probe").mkdir()
+    (tmp_path / "probe" / "scenarios.yaml").write_text(
+        "tool: probe\nscenarios:\n  - name: probe_ok\n    args: {number: 1}\n"
+        "  - name: probe_missing\n    args: {number: 9}\n    expect: not_found\n", encoding="utf-8")
+    loaded = load_scenario_files(tmp_path)
+    assert [(s.name, s.tool, s.args, s.expect) for s in loaded] == [
+        ("probe_ok", "probe", {"number": 1}, "ok"), ("probe_missing", "probe", {"number": 9}, "not_found")]
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "scenarios.yaml").write_text("tool: probe\nscenarios: []\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="does not match its folder"):
+        load_scenario_files(tmp_path)

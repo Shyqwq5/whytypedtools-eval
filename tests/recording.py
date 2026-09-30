@@ -27,6 +27,7 @@ from urllib.parse import quote, unquote_plus
 
 import httpx
 import respx
+import yaml
 
 from whytypedtools_eval.github import GitHubClient
 from whytypedtools_eval.tools.base import ToolContext
@@ -115,6 +116,29 @@ SCENARIOS: list[Scenario] = [
     Scenario("add_label_not_found", "add_label", {"number": 9999, "labels": ["bug"]}, writes=True,
              expect="not_found"),
 ]
+
+
+
+
+def load_scenario_files(fixtures_dir: Path = FIXTURES_DIR) -> list[Scenario]:
+    """Scenarios of tools added through the scaffold: tests/fixtures/<tool>/scenarios.yaml.
+
+    Format: {tool: <name>, scenarios: [{name, args, page_size, auth, repo_suffix,
+    expect, writes}]}; only `name` is required."""
+    out = []
+    for path in sorted(fixtures_dir.glob("*/scenarios.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        tool = data["tool"]
+        if tool != path.parent.name:
+            raise ValueError(f"{path}: tool {tool!r} does not match its folder")
+        out += [Scenario(tool=tool, **s) for s in data.get("scenarios") or []]
+    return out
+
+
+SCENARIOS += load_scenario_files()
+_names = [s.name for s in SCENARIOS]
+if len(_names) != len(set(_names)):
+    raise ValueError(f"duplicate scenario names: {sorted({n for n in _names if _names.count(n) > 1})}")
 
 
 # -- sanitising --------------------------------------------------------------

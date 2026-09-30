@@ -3,6 +3,7 @@
     uv run python scripts/record_fixtures.py            # real sandbox; needs .env
     uv run python scripts/record_fixtures.py --fake     # in-memory fake seeded from YAML
     uv run python scripts/record_fixtures.py --only search_rate_limit list_default
+    uv run python scripts/record_fixtures.py --tool list_comments   # every scenario of one tool
 
 Real recording refuses to run unless the sandbox is exactly in the seed state
 (a dry-run reset plans zero writes) and the search index is up to date.
@@ -45,7 +46,12 @@ SEED_FILE = ROOT / "sandbox" / "seed_data.yaml"
 STATE_FILE = ROOT / "sandbox" / "state.json"
 
 
-def _selected(only: list[str] | None) -> list[Scenario]:
+def _selected(only: list[str] | None, tool: str | None = None) -> list[Scenario]:
+    if tool:
+        chosen = [s for s in SCENARIOS if s.tool == tool]
+        if not chosen:
+            sys.exit(f"error: no scenarios for tool {tool!r} (tests/fixtures/{tool}/scenarios.yaml)")
+        return chosen
     if not only:
         return SCENARIOS
     unknown = set(only) - {s.name for s in SCENARIOS}
@@ -125,9 +131,11 @@ def record_real(scenarios: list[Scenario]) -> None:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--fake", action="store_true", help="Record from the in-memory fake instead of GitHub.")
-    p.add_argument("--only", nargs="+", metavar="SCENARIO", help="Record only these scenarios.")
+    which = p.add_mutually_exclusive_group()
+    which.add_argument("--only", nargs="+", metavar="SCENARIO", help="Record only these scenarios.")
+    which.add_argument("--tool", metavar="NAME", help="Record every scenario of this tool.")
     args = p.parse_args()
-    scenarios = _selected(args.only)
+    scenarios = _selected(args.only, args.tool)
     if args.fake:
         record_fake(scenarios)
     else:
