@@ -128,7 +128,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   report, estimate), CLI `scripts/run_eval.py`, results in `results/<eval-id>/`.
 - Run tests: `uv run pytest`.
 
-## Status / handoff (updated 2026-09-30, generic baseline built; full run waiting on the estimate check)
+## Status / handoff (updated 2026-09-30, generic full run stopped at 133/240 on a monthly model limit)
 
 ### Where things stand
 - Steps 1-5 done for tool_e. `uv run pytest`: all pass (~400 tests). Tool tests use
@@ -234,10 +234,15 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
   "invalid tool generation" (guard call with no tools). User decision: guard calls use
   response_format json_object (commit 4b0b3ff, prompt unchanged); the stopped run is
   replaced by a fresh one, not resumed.
-- Third verification 20260930T075307Z-fa4d8f53: checks 1-4 pass, check 5 fails
-  (estimate 15.6M > 15M; mostly tool_a single-run variance). **Waiting for the user's
-  decision** before the fresh full run. Pooled estimates: ~13.3M (tool_a from both
-  verifications) or ~12.1M (both configs pooled).
+- Third verification 20260930T075307Z-fa4d8f53: checks 1-4 pass, check 5 failed
+  (15.6M); the user accepted the pooled estimate (~13.3M; cost guard, not a scoring rule).
+- Repo name: the system prompt does not name the sandbox repo; by design the generic tool
+  uses {repo} (user decision: option 1, a finding, no change).
+- Fresh full run 20260930T082252Z-40c4cefd stopped at 133/240 (132 good runs): 5
+  infrastructure failures recovered on rerun (HTTP 422 "invalid tool generation", agent
+  and guard), then HTTP 429 "past the per-month request limit for this model" failed
+  its rerun too. The quota detector only matches the Trial-key wording ("/ month").
+  **Waiting for the user** (monthly model limit) before resuming with --rerun-errors.
 - CI (.github/workflows/ci.yml): Linux, sockets disabled, coverage gate 95%; scoring
   baseline tests/scoring_baseline/ (14 real sanitised traces, re-scored by a test).
 
@@ -245,9 +250,9 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 1. User decision on the estimate check (see above); then the fresh full run and the
    report (compare with the typed baseline before tuning; tuned typed as a column;
    record the guard 422 finding and the stopped first run).
-2. Push: the user runs it. The GitHub repo exists with one commit (0947d07, MIT LICENSE
-   only, no common history). Keep local hashes (no rebase); history is not rewritten
-   for the author email (user decision); runs/ stays out.
+2. Pushed by the user up to c8541d5 (remote `origin`, the public GitHub repo).
+   Later commits are pushed with a plain `git push` by the user. CI's first run failed
+   in "Set up job" (setup-uv has no v10 tag); fixed in 239b2ac by pinning v10.2.0.
 3. For future tuning: a held-out task set that is not looked at while tuning.
 
 ### Deferred (by user decision)
