@@ -137,70 +137,92 @@ def run_eval(
     records = [
         _rescore(r, tasks_by_id[r["task_id"]], trace_dir, plan, keymap, bulk_specs) for r in plan.base_records
     ]
-    total = len(plan.only) if plan.only is not None else plan.runs * len(plan.tasks) * len(plan.configs)
-    done = 0
+    combos = [
+        (run_index, task, config)
+        for run_index in range(plan.runs)
+        for task in plan.tasks
+        for config in plan.configs
+        if plan.only is None or (config, task.id, run_index) in plan.only
+    ]
+    # Written before any run, so an interrupted eval can be resumed with --rerun-errors.
+    (out / "plan.json").write_text(json.dumps({
+        "eval_id": eval_id,
+        "started_at": started.isoformat(timespec="seconds"),
+        "configs": plan.configs,
+        "runs": plan.runs,
+        "task_set": plan.task_set,
+        "task_set_sha256": plan.task_set_sha256,
+        "task_ids": [t.id for t in plan.tasks],
+        "write_mode": plan.write_mode,
+        "max_tool_calls": plan.max_tool_calls,
+        "parent_eval": plan.parent_eval,
+    }, indent=2) + "\n", encoding="utf-8", newline="\n")
+    aborted: str | None = None
 
     with (out / "runs.jsonl").open("x", encoding="utf-8", newline="\n") as runs_file:
         for record in records:
             runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
-        for run_index in range(plan.runs):
-            for task in plan.tasks:
-                for config in plan.configs:
-                    if plan.only is not None and (config, task.id, run_index) not in plan.only:
-                        continue
-                    prompt = prompt_for(task, keymap)
-                    setup = CONFIGS[config](tool_client, repo, plan.write_mode, prompt)
-                    requests_before = tool_client.requests_made
-                    result = run_agent(
-                        prompt,
-                        model=model,
-                        call_tool=setup.call_tool,
-                        tools=setup.tools,
-                        system_prompt=system_prompt,
-                        max_tool_calls=plan.max_tool_calls,
-                        trace_dir=trace_dir / eval_id,
-                        secrets=secrets or [],
-                        metadata={
-                            **(metadata or {}),
-                            "eval_id": eval_id,
-                            "config": config,
-                            "task_id": task.id,
-                            "run_index": run_index,
-                            "write_mode": plan.write_mode,
-                            **setup.metadata,
-                        },
-                    )
-                    record = score_run(
-                        task,
-                        events=read_trace(result.trace_path),
-                        write_log=setup.ctx.write_log,
-                        keymap=keymap,
-                        write_mode=plan.write_mode,
-                        typed=setup.typed,
-                        bulk=bulk_specs.get(task.id),
-                    )
-                    record.update(config=config, run_index=run_index, run_id=result.run_id,
-                                  trace=result.trace_path.name, drift=None,
-                                  github_requests=tool_client.requests_made - requests_before,
-                                  sandbox_requests=0, rerun_of=plan.parent_eval)
+        for done, (run_index, task, config) in enumerate(combos, start=1):
+            prompt = prompt_for(task, keymap)
+            setup = CONFIGS[config](tool_client, repo, plan.write_mode, prompt)
+            requests_before = tool_client.requests_made
+            result = run_agent(
+                prompt,
+                model=model,
+                call_tool=setup.call_tool,
+                tools=setup.tools,
+                system_prompt=system_prompt,
+                max_tool_calls=plan.max_tool_calls,
+                trace_dir=trace_dir / eval_id,
+                secrets=secrets or [],
+                metadata={
+                    **(metadata or {}),
+                    "eval_id": eval_id,
+                    "config": config,
+                    "task_id": task.id,
+                    "run_index": run_index,
+                    "write_mode": plan.write_mode,
+                    **setup.metadata,
+                },
+            )
+            record = score_run(
+                task,
+                events=read_trace(result.trace_path),
+                write_log=setup.ctx.write_log,
+                keymap=keymap,
+                write_mode=plan.write_mode,
+                typed=setup.typed,
+                bulk=bulk_specs.get(task.id),
+            )
+            record.update(config=config, run_index=run_index, run_id=result.run_id,
+                          trace=result.trace_path.name, drift=None,
+                          github_requests=tool_client.requests_made - requests_before,
+                          sandbox_requests=0, rerun_of=plan.parent_eval)
 
-                    if plan.write_mode == "live" and any(w["executed"] for w in setup.ctx.write_log):
-                        sb_before = _sandbox_requests(sandbox)
-                        drift = sandbox.drift()
-                        record["drift"] = len(drift)
-                        if drift:
-                            emit(f"  sandbox drifted ({len(drift)} change(s)); resetting")
-                            sandbox.reset()
-                            keymap = sandbox.keymap()
-                        record["sandbox_requests"] = _sandbox_requests(sandbox) - sb_before
+            if plan.write_mode == "live" and any(w["executed"] for w in setup.ctx.write_log):
+                sb_before = _sandbox_requests(sandbox)
+                drift = sandbox.drift()
+                record["drift"] = len(drift)
+                if drift:
+                    emit(f"  sandbox drifted ({len(drift)} change(s)); resetting")
+                    sandbox.reset()
+                    keymap = sandbox.keymap()
+                record["sandbox_requests"] = _sandbox_requests(sandbox) - sb_before
 
-                    records.append(record)
-                    runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
-                    runs_file.flush()
-                    done += 1
-                    verdict = ("BULK WRITE" if record["bulk"]["labelled"] else "NO BULK WRITE") if record.get("bulk")                         else "PASS" if record["passed"] else "FAIL"
-                    emit(f"[{done}/{total}] {config} {task.id} run {run_index + 1}: {verdict} "
-                         f"({record['safety']['outcome']}, {record['status']})")
+            records.append(record)
+            runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
+            runs_file.flush()
+            if record.get("bulk"):
+                verdict = "BULK WRITE" if record["bulk"]["labelled"] else "NO BULK WRITE"
+            else:
+                verdict = "PASS" if record["passed"] else "FAIL"
+            emit(f"[{done}/{len(combos)}] {config} {task.id} run {run_index + 1}: {verdict} "
+                 f"({record['safety']['outcome']}, {record['status']})")
+            if (record.get("error_detail") or {}).get("fatal"):
+                # Every later run would fail the same way (e.g. quota used up): stop here.
+                aborted = record["error_detail"]["message"]
+                emit(f"stopping: {aborted}")
+                break
 
     meta = {
         **(metadata or {}),
@@ -219,6 +241,8 @@ def run_eval(
         "max_tool_calls": plan.max_tool_calls,
         "parent_eval": plan.parent_eval,
         "reruns": len(records) - len(plan.base_records) if plan.parent_eval else 0,
+        "aborted": aborted,
+        "planned_runs": len(combos) + len(plan.base_records),
         "system_prompt_sha256": sha256_text(system_prompt.text),
         "github_requests": {
             "tools": sum(r["github_requests"] for r in records),
@@ -233,6 +257,9 @@ def run_eval(
     )
     (out / "summary.md").write_text(clean(to_markdown(summary, meta)), encoding="utf-8", newline="\n")
     emit(f"results: {out}")
+    if aborted:
+        raise EvalError(f"eval stopped early: {aborted} Completed runs are saved in {out}; "
+                        f"resume with --rerun-errors {eval_id}")
     return out
 
 

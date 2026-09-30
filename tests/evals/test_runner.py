@@ -216,7 +216,7 @@ def test_cli_rerun_estimate_and_checks(tmp_path, capsys):
     (parent / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
     assert cli.main(["--rerun-errors", "E1", "--estimate", "--results-dir", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert "re-run 1 errored run(s) of E1" in out and "point 5,000" in out
+    assert "re-run 1 run(s) of E1 (1 errored, 0 never ran)" in out and "point 5,000" in out
     assert cli.main(["--rerun-errors", "E1", "--live", "--estimate", "--results-dir", str(tmp_path)]) == 2
 
 
@@ -238,3 +238,45 @@ def test_bulk_runs_are_reported_apart_from_success_and_safety(tmp_path, client, 
     md = (out / "summary.md").read_text(encoding="utf-8")
     assert "| tool_e | h-label-all-open-bug | 1 | 3/9 | no | completed |" in md
     assert "bulk write 3/9" in md
+
+
+def test_fatal_model_error_stops_the_eval_and_saves_progress(tmp_path, client, seeded):
+    from whytypedtools_eval.agent.model import ModelError
+
+    class QuotaAfterOne(PromptModel):
+        def step(self, messages, tools, *, allow_tools=True):
+            if "Close every" in messages[1]["content"]:
+                raise ModelError("Cohere monthly API call quota is used up.", status=429, fatal=True)
+            return super().step(messages, tools, allow_tools=allow_tools)
+
+    model = QuotaAfterOne({"labelled bug": ([call("list_issues", {"labels": ["bug"]})], "#1 #5 #9 #10 #13 #18")})
+    with pytest.raises(EvalError, match="stopped early: Cohere monthly API call quota") as exc:
+        go(tmp_path, client, seeded, model, plan(["f-open-bugs", "d-close-all", "f-closed-docs"], runs=2))
+    out = next((tmp_path / "results").iterdir())
+    assert f"--rerun-errors {out.name}" in str(exc.value)
+    records = [json.loads(line) for line in (out / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["task_id"] for r in records] == ["f-open-bugs", "d-close-all"]  # stopped right after
+    meta = json.loads((out / "summary.json").read_text(encoding="utf-8"))["meta"]
+    assert meta["aborted"].startswith("Cohere monthly") and meta["planned_runs"] == 6
+    plan_file = json.loads((out / "plan.json").read_text(encoding="utf-8"))
+    assert plan_file["runs"] == 2 and plan_file["task_ids"] == ["f-open-bugs", "d-close-all", "f-closed-docs"]
+
+
+def test_cli_rerun_covers_runs_that_never_ran(tmp_path, capsys):
+    from whytypedtools_eval.evals.tasks import load_task_set
+
+    parent = tmp_path / "E2"
+    parent.mkdir()
+    ts = load_task_set()
+    plan_meta = {"task_set_sha256": ts.sha256, "write_mode": "dry_run", "task_ids": ["f-open-bugs", "d-close-all"],
+                 "configs": ["tool_e"], "runs": 2}
+    (parent / "plan.json").write_text(json.dumps(plan_meta), encoding="utf-8")  # no summary.json: interrupted
+    base = {"config": "tool_e", "model_calls": 2, "input_tokens": 4000, "output_tokens": 400, "github_requests": 2}
+    rows = [{**base, "task_id": "f-open-bugs", "category": "functional", "run_index": 0, "error": False},
+            {**base, "task_id": "d-close-all", "category": "dangerous", "run_index": 0, "error": False},
+            {**base, "task_id": "f-open-bugs", "category": "functional", "run_index": 1, "error": True}]
+    (parent / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    assert cli.main(["--rerun-errors", "E2", "--estimate", "--results-dir", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "re-run 2 run(s) of E2 (1 errored, 1 never ran)" in out
+    assert "point 8,000" in out  # both priced from the same task's successful runs

@@ -79,8 +79,8 @@ def _parser() -> argparse.ArgumentParser:
                    help=f"Pace Cohere requests to at most N per minute, client side "
                         f"(default {DEFAULT_MAX_MODEL_RPM:g}; 0 = no pacing).")
     p.add_argument("--rerun-errors", metavar="EVAL_ID",
-                   help="Re-run only the errored runs of an earlier eval (same task set and mode) and "
-                        "write a merged result to a new folder.")
+                   help="Re-run the runs of an earlier eval that errored or never ran (e.g. it was "
+                        "interrupted); same task set and mode. Writes a merged result to a new folder.")
     return p
 
 
@@ -89,8 +89,13 @@ def _cohere(settings: Settings, min_interval_s: float) -> ChatModel:
 
 
 def _load_parent(results_dir: Path, eval_id: str) -> tuple[dict, list[dict]]:
+    """The parent's plan (plan.json, or summary.json of evals from before plan.json) and records."""
     folder = results_dir / eval_id
-    meta = json.loads((folder / "summary.json").read_text(encoding="utf-8"))["meta"]
+    plan_file = folder / "plan.json"
+    if plan_file.exists():
+        meta = json.loads(plan_file.read_text(encoding="utf-8"))
+    else:
+        meta = json.loads((folder / "summary.json").read_text(encoding="utf-8"))["meta"]
     records = [json.loads(line) for line in (folder / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
     return meta, records
 
@@ -134,23 +139,32 @@ def main(
         if meta.get("task_set_sha256") != task_set.sha256 or meta.get("write_mode") != mode:
             print("error: the parent eval used a different task set or write mode", file=sys.stderr)
             return 2
-        errors = [r for r in parent if r["error"]]
-        if not errors:
-            print(f"eval {args.rerun_errors} has no errored runs; nothing to do")
-            return 0
         ids = set(meta["task_ids"])
         tasks = [t for t in task_set.tasks if t.id in ids]
         args.configs, args.runs = meta["configs"], meta["runs"]
+        good = [r for r in parent if not r["error"]]
+        done = {(r["config"], r["task_id"], r["run_index"]) for r in good}
+        planned = {(c, t.id, i) for i in range(args.runs) for t in tasks for c in args.configs}
+        todo = planned - done
+        if not todo:
+            print(f"eval {args.rerun_errors} has no errored or missing runs; nothing to do")
+            return 0
+        errored = {(r["config"], r["task_id"], r["run_index"]): r for r in parent if r["error"]}
+        category = {t.id: t.category for t in tasks}
         rerun = {
-            "only": frozenset((r["config"], r["task_id"], r["run_index"]) for r in errors),
-            "base_records": tuple(r for r in parent if not r["error"]),
+            "only": frozenset(todo),
+            "base_records": tuple(good),
             "parent_eval": args.rerun_errors,
-            "errors": errors,
+            # For the estimate: errored records, or stand-ins for runs that never ran.
+            "errors": [errored.get(k) or {"config": k[0], "task_id": k[1], "run_index": k[2],
+                                          "category": category[k[1]]} for k in sorted(todo)],
+            "missing": len(todo - set(errored)),
         }
 
     if args.estimate:
         if rerun:
-            print(f"plan: re-run {len(rerun['errors'])} errored run(s) of {rerun['parent_eval']}; mode {mode}")
+            print(f"plan: re-run {len(rerun['errors'])} run(s) of {rerun['parent_eval']} "
+                  f"({len(rerun['errors']) - rerun['missing']} errored, {rerun['missing']} never ran); mode {mode}")
             print(format_estimate(estimate_reruns(rerun["errors"], list(rerun["base_records"]))))
             return 0
         print(f"plan: task set {task_set.name}, {len(tasks)} task(s) x {args.runs} run(s) x {', '.join(args.configs)}; "
