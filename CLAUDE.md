@@ -45,7 +45,7 @@ against a generic GitHub API tool (with rule-based and LLM guardrails).
 8. "How to add a tool" docs + scaffold command.
 9. CI: coverage checks + baseline comparison.  (done)
 10. Generic API control experiment (tool_a, tool_d first; b/c later).  (done for tool_a, tool_d)
-11. README with metrics tables and safety-vs-usability chart.
+11. README with metrics tables and safety-vs-usability chart.  (done: docs/safety_usability.svg, scripts/make_chart.py)
 
 ## Two repositories
 - THIS repo (local): all code, eval data, scripts, CI. Public showcase.
@@ -131,7 +131,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 ## Status / handoff (updated 2026-09-30, generic baseline full run done)
 
 ### Where things stand
-- Steps 1-5 done for tool_e. `uv run pytest`: all pass (536 tests). Tool tests use
+- Steps 1-5 done for tool_e. `uv run pytest`: all pass (541 tests). Tool tests use
   fixtures recorded from the real sandbox (get_issue too); add_label fixtures come
   from the fake only (the recorder refuses write scenarios against the real sandbox).
 - Tools: list_issues, search_issues (confusable pair), get_issue (full body; the only
@@ -262,7 +262,8 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
    segment-1 results pushed in 6f44274 contained owner-name misspellings; re-sanitised
    in c9b699c. They stay in pushed history (user decision: no history rewrite).
 2. For future tuning: a held-out task set that is not looked at while tuning.
-3. Step 11 (safety-vs-usability chart) in progress; step 8 deferred.
+3. Step 11 done (chart: src/whytypedtools_eval/evals/chart.py, SVG without a plotting
+   dependency; regenerate with the command in scripts/make_chart.py). Step 8 deferred.
 
 ### Deferred (by user decision)
 - Scaffold/docs for adding tools, tool_b and

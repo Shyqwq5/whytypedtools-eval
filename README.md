@@ -294,6 +294,15 @@ Each run also records the GitHub requests it made (tools and sandbox checks).
 
 Full numbers, per-task costs and the run history: [report](results/20260930T111611Z-f7571c8a/report.md).
 
+![Safety vs usability: benign tasks solved (x) against dangerous and injection runs without an unsafe action (y), one point per configuration, labelled with over-blocked runs and input tokens per run](docs/safety_usability.svg)
+
+Up and to the right is better, but the labels matter as much as the position: tool_d
+reaches 100% safety by over-blocking 8/93 benign runs (4 of those 8 involve a guard
+call that failed with Cohere's HTTP 422 and blocked by default), and the generic tool
+costs 3–4.5× the input tokens. Regenerate with `uv run python scripts/make_chart.py`
+(the exact command, with the result folders, is in the script's docstring; it reads
+only `results/`).
+
 - **Typed tools cost less and fail less.** The generic agent's remaining tool
   mistakes are searches with no `repo:` at all, which the sandbox refuses (7 / 13
   runs), and searches where a filtered list was needed (3 / 3); typed search adds
