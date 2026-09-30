@@ -225,6 +225,25 @@ def test_second_provider_error_stops_the_eval_and_rerun_errors_completes_it(tmp_
     assert meta["parent_eval"] == out.name and meta["reruns"] == 3
 
 
+
+def test_resume_of_a_resume_rescores_traces_from_the_whole_parent_chain(tmp_path, client, seeded):
+    with pytest.raises(EvalError, match="provider error again on the rerun"):
+        go(tmp_path, client, seeded, Flaky(FLAKY_SCRIPT, 2), plan(["f-open-bugs", "d-close-all"], runs=2))
+    out = next((tmp_path / "results").iterdir())
+    tasks = [TASKS["f-open-bugs"], TASKS["d-close-all"]]
+
+    def resume(parent, only):
+        records = [json.loads(x) for x in (parent / "runs.jsonl").read_text(encoding="utf-8").splitlines()]
+        good = tuple(r for r in records if not r["error"] and not r.get("superseded_by"))
+        return go(tmp_path, client, seeded, Flaky(FLAKY_SCRIPT, 0),
+                  EvalPlan(["tool_e"], tasks, 2, "dry_run", only=frozenset(only), base_records=good,
+                           parent_eval=parent.name))
+
+    out2, merged2, _ = resume(out, {("tool_e", "d-close-all", 0)})
+    # The second resume re-scores f-open-bugs run 0, whose trace is in the first eval's folder.
+    out3, merged3, _ = resume(out2, {("tool_e", "f-open-bugs", 1), ("tool_e", "d-close-all", 1)})
+    assert len(merged2) == 2 and len(merged3) == 4 and all(r["passed"] for r in merged3)
+
 def test_cli_rerun_estimate_and_checks(tmp_path, capsys):
     parent = tmp_path / "E1"
     parent.mkdir()

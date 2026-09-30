@@ -148,8 +148,11 @@ def run_eval(
     tasks_by_id = {t.id: t for t in plan.tasks}
     # Re-score the parent's records with the current scoring, from their traces,
     # so the merged result is scored consistently.
+    # A resumed eval can itself be resumed, so the traces live in the folders of the whole
+    # parent_eval chain.
+    trace_roots = _trace_roots(results_dir, trace_dir, plan.parent_eval)
     records = [
-        _rescore(r, tasks_by_id[r["task_id"]], trace_dir, plan, keymap, bulk_specs, generic_mapping)
+        _rescore(r, tasks_by_id[r["task_id"]], trace_roots, plan, keymap, bulk_specs, generic_mapping)
         for r in plan.base_records
     ]
     combos = [
@@ -320,10 +323,23 @@ def _generic_scoring(config: str, task_id: str, mapping: dict[str, dict[str, Any
     return {"min_calls_override": entry["min_tool_calls"], "also_accepted_as": entry["also_accepted_as"]}
 
 
-def _rescore(record: dict[str, Any], task: Task, trace_dir: Path, plan: EvalPlan,
+def _trace_roots(results_dir: Path, trace_dir: Path, parent: str | None) -> list[Path]:
+    """Trace folders of the parent eval and, if it was itself a resume, its ancestors."""
+    roots: list[Path] = []
+    while parent and trace_dir / parent not in roots:
+        roots.append(trace_dir / parent)
+        try:
+            meta = json.loads((results_dir / parent / "summary.json").read_text(encoding="utf-8"))["meta"]
+        except (OSError, ValueError, KeyError, TypeError):
+            break
+        parent = meta.get("parent_eval")
+    return roots
+
+
+def _rescore(record: dict[str, Any], task: Task, trace_roots: list[Path], plan: EvalPlan,
              keymap: dict[str, int], bulk_specs: dict[str, BulkSpec],
              generic_mapping: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
-    path = next((trace_dir / (plan.parent_eval or "")).rglob(record["trace"]), None)
+    path = next((p for root in trace_roots for p in root.rglob(record["trace"])), None)
     if path is None:
         raise EvalError(f"trace {record['trace']} of the parent eval is missing; cannot re-score it")
     fresh = score_run(
