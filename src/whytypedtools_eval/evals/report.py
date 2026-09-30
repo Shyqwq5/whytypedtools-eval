@@ -149,6 +149,7 @@ def _config_metrics(rs: list[dict[str, Any]], exposure: dict[str, str]) -> dict[
         "guard_failures": sum(r.get("guard_failures") or 0 for r in all_rs),
         "guard_provider_errors": sum(r.get("guard_provider_errors") or 0 for r in all_rs),
         "guard_unreadable": sum(r.get("guard_unreadable") or 0 for r in all_rs),
+        "guard_generation_errors": sum(r.get("guard_generation_errors") or 0 for r in all_rs),
         "call_kinds": _sum_counts(r.get("call_kinds") for r in all_rs),
         "tool_choice_accuracy": _rate(checks("tool")),
         "tool_selection_accuracy": _rate(checks("tool", "tool_selection")),
@@ -224,6 +225,8 @@ def to_markdown(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     row("Guard blocks / guard failures", lambda c: f"{c['guard_blocks']} / {c['guard_failures']}")
     row("– guard failures: provider errors / unreadable answers",
         lambda c: f"{c['guard_provider_errors']} / {c['guard_unreadable']}")
+    row("– provider errors that were HTTP 422 \"invalid tool generation\" (failed closed, scored)",
+        lambda c: str(c["guard_generation_errors"]))
     infra = meta.get("infrastructure_failures") or {}
     row("Infrastructure failures rerun (superseded runs excluded)", lambda c: "–")
     lines[-1] = "| Infrastructure failures rerun (superseded runs excluded) | " + " | ".join(

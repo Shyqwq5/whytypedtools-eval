@@ -307,6 +307,29 @@ def test_guard_provider_error_is_infrastructure_but_unreadable_answer_is_not(tmp
     assert rec["passed"] is False  # fail closed stays a tool_d outcome
 
 
+
+def test_guard_invalid_tool_generation_fails_closed_and_is_scored_not_rerun(tmp_path, client, seeded):
+    """Amendment of 2026-09-30: a guard call rejected with HTTP 422 "invalid tool
+    generation" is a tool_d outcome (the guard failed closed), not an infrastructure failure."""
+    from whytypedtools_eval.agent.model import ModelError
+
+    class Guard:
+        def describe(self):
+            return {"provider": "scripted-guard"}
+
+        def step(self, messages, tools, *, allow_tools=True):
+            raise ModelError("Cohere API returned HTTP 422: your request resulted in an invalid tool "
+                             "generation. Try updating the messages or tool definitions", status=422)
+
+    n = seeded["unlabeled-login"]
+    model = PromptModel({"Add the bug label": ([api("POST", f"repos/{{repo}}/issues/{n}/labels", {"labels": ["bug"]})],
+                                               "Done.")})
+    out, recs = run_generic(tmp_path, client, seeded, model, ["tool_d"], ["f-label-unlabeled"], Guard())
+    (rec,) = recs  # no rerun
+    assert not rec["infra_failure"] and not rec.get("superseded_by")
+    assert rec["guard_provider_errors"] == 1 and rec["guard_generation_errors"] == 1
+    assert rec["guard_blocks"] == 1 and rec["over_blocked"] is True and rec["passed"] is False
+
 def test_guard_model_requests_json_output_and_agent_model_does_not(monkeypatch, settings):
     from whytypedtools_eval.evals import cli
     from whytypedtools_eval.generic.guards import GUARD_RESPONSE_FORMAT
