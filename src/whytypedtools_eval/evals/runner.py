@@ -23,7 +23,7 @@ from typing import Any, Protocol
 from whytypedtools_eval.agent.loop import DEFAULT_MAX_TOOL_CALLS, SystemPrompt, run_agent
 from whytypedtools_eval.agent.model import ChatModel
 from whytypedtools_eval.agent.trace import REDACTED, new_run_id, read_trace, sha256_json, sha256_text, utc_now
-from whytypedtools_eval.evals.configs import CONFIGS, TYPED
+from whytypedtools_eval.evals.configs import CONFIGS, GENERIC, NEEDS_GUARD_MODEL, TYPED, SetupContext
 from whytypedtools_eval.evals.effects import Effect
 from whytypedtools_eval.evals.report import aggregate, to_markdown
 from whytypedtools_eval.evals.scoring import BulkSpec, score_run
@@ -99,12 +99,22 @@ def run_eval(
     metadata: dict[str, Any] | None = None,
     exposure: dict[str, str] | None = None,
     bulk_loader: Callable[[dict[str, int]], dict[str, BulkSpec]] | None = None,
+    guard_model: ChatModel | None = None,
+    generic_mapping: dict[str, dict[str, Any]] | None = None,
     emit: Callable[[str], None] = print,
 ) -> Path:
     """Run the plan and return the results directory for this eval."""
     unknown = [c for c in plan.configs if c not in CONFIGS]
     if unknown:
         raise EvalError(f"unknown configuration(s): {', '.join(unknown)}")
+    if any(c in NEEDS_GUARD_MODEL for c in plan.configs) and guard_model is None:
+        raise EvalError("tool_d needs a guard model")
+    if any(c in GENERIC for c in plan.configs):
+        if generic_mapping is None:
+            raise EvalError("generic configurations need the committed scoring mapping")
+        missing_map = [t.id for t in plan.tasks if t.id not in generic_mapping]
+        if missing_map:
+            raise EvalError(f"the generic mapping has no entry for: {', '.join(missing_map)}")
     system_prompt = system_prompt or SystemPrompt.load()
     clean = _Sanitiser(secrets or [], repo)
 
@@ -135,7 +145,8 @@ def run_eval(
     # Re-score the parent's records with the current scoring, from their traces,
     # so the merged result is scored consistently.
     records = [
-        _rescore(r, tasks_by_id[r["task_id"]], trace_dir, plan, keymap, bulk_specs) for r in plan.base_records
+        _rescore(r, tasks_by_id[r["task_id"]], trace_dir, plan, keymap, bulk_specs, generic_mapping)
+        for r in plan.base_records
     ]
     combos = [
         (run_index, task, config)
@@ -164,7 +175,7 @@ def run_eval(
             runs_file.write(clean(json.dumps(record, ensure_ascii=False)) + "\n")
         for done, (run_index, task, config) in enumerate(combos, start=1):
             prompt = prompt_for(task, keymap)
-            setup = CONFIGS[config](tool_client, repo, plan.write_mode, prompt)
+            setup = CONFIGS[config](SetupContext(tool_client, repo, plan.write_mode, prompt, guard_model))
             requests_before = tool_client.requests_made
             result = run_agent(
                 prompt,
@@ -193,6 +204,7 @@ def run_eval(
                 write_mode=plan.write_mode,
                 typed=setup.typed,
                 bulk=bulk_specs.get(task.id),
+                **_generic_scoring(config, task.id, generic_mapping),
             )
             record.update(config=config, run_index=run_index, run_id=result.run_id,
                           trace=result.trace_path.name, drift=None,
@@ -218,9 +230,9 @@ def run_eval(
                 verdict = "PASS" if record["passed"] else "FAIL"
             emit(f"[{done}/{len(combos)}] {config} {task.id} run {run_index + 1}: {verdict} "
                  f"({record['safety']['outcome']}, {record['status']})")
-            if (record.get("error_detail") or {}).get("fatal"):
+            if (record.get("error_detail") or {}).get("fatal") or record.get("guard_fatal"):
                 # Every later run would fail the same way (e.g. quota used up): stop here.
-                aborted = record["error_detail"]["message"]
+                aborted = (record.get("error_detail") or {}).get("message") or "the guard model is unusable"
                 emit(f"stopping: {aborted}")
                 break
 
@@ -244,6 +256,7 @@ def run_eval(
         "aborted": aborted,
         "planned_runs": len(combos) + len(plan.base_records),
         "system_prompt_sha256": sha256_text(system_prompt.text),
+        "guard_model": guard_model.describe() if guard_model is not None else None,
         "github_requests": {
             "tools": sum(r["github_requests"] for r in records),
             "sandbox_after_runs": sum(r["sandbox_requests"] for r in records),
@@ -266,8 +279,17 @@ def run_eval(
 _CARRIED = ("config", "run_index", "run_id", "trace", "drift", "github_requests", "sandbox_requests", "rerun_of")
 
 
+def _generic_scoring(config: str, task_id: str, mapping: dict[str, dict[str, Any]] | None) -> dict[str, Any]:
+    """Extra score_run arguments for generic configurations (from the committed mapping)."""
+    if config not in GENERIC or mapping is None:
+        return {}
+    entry = mapping[task_id]
+    return {"min_calls_override": entry["min_tool_calls"], "also_accepted_as": entry["also_accepted_as"]}
+
+
 def _rescore(record: dict[str, Any], task: Task, trace_dir: Path, plan: EvalPlan,
-             keymap: dict[str, int], bulk_specs: dict[str, BulkSpec]) -> dict[str, Any]:
+             keymap: dict[str, int], bulk_specs: dict[str, BulkSpec],
+             generic_mapping: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     path = next((trace_dir / (plan.parent_eval or "")).rglob(record["trace"]), None)
     if path is None:
         raise EvalError(f"trace {record['trace']} of the parent eval is missing; cannot re-score it")
@@ -280,6 +302,7 @@ def _rescore(record: dict[str, Any], task: Task, trace_dir: Path, plan: EvalPlan
         write_mode=plan.write_mode,
         typed=record["config"] in TYPED,
         bulk=bulk_specs.get(task.id),
+        **_generic_scoring(record["config"], task.id, generic_mapping),
     )
     fresh.update({k: record.get(k) for k in _CARRIED})
     return fresh

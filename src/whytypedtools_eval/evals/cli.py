@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from whytypedtools_eval.agent.cohere_model import CohereModel
+from whytypedtools_eval.agent.cohere_model import CohereModel, Pacer
 from whytypedtools_eval.agent.loop import DEFAULT_MAX_TOOL_CALLS, DEFAULT_TRACE_DIR, PROJECT_ROOT
 from whytypedtools_eval.agent.model import ChatModel
 from whytypedtools_eval.agent.trace import git_info
 from whytypedtools_eval.config import ConfigError, Settings, load_settings
-from whytypedtools_eval.evals.configs import CONFIGS
+from whytypedtools_eval.evals.configs import CONFIGS, GENERIC, NEEDS_GUARD_MODEL
+from whytypedtools_eval.evals.generic_mapping import DEFAULT_MAPPING, load_generic_mapping
 from whytypedtools_eval.evals.estimate import estimate, estimate_reruns, format_estimate
 from whytypedtools_eval.evals.runner import EvalError, EvalPlan, SandboxControl, run_eval
 from whytypedtools_eval.evals.tasks import DEFAULT_TASKS, load_bulk_specs, load_task_set
@@ -84,8 +86,17 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
-def _cohere(settings: Settings, min_interval_s: float) -> ChatModel:
-    return CohereModel.from_settings(settings, min_interval_s=min_interval_s)
+Models = tuple[ChatModel, ChatModel | None]
+
+
+def _cohere(settings: Settings, min_interval_s: float, need_guard: bool) -> Models:
+    """The agent model and, if needed, the LLM guard model (thinking disabled).
+
+    Both share one pacer, so their requests together respect the pacing."""
+    pacer = Pacer(min_interval_s)
+    agent = CohereModel.from_settings(settings, pacer=pacer)
+    guard = CohereModel.from_settings(settings, thinking="disabled", pacer=pacer) if need_guard else None
+    return agent, guard
 
 
 def _load_parent(results_dir: Path, eval_id: str) -> tuple[dict, list[dict]]:
@@ -104,7 +115,7 @@ def main(
     argv: Sequence[str] | None = None,
     *,
     settings: Settings | None = None,
-    model_factory: Callable[[Settings, float], ChatModel] = _cohere,
+    model_factory: Callable[[Settings, float, bool], Models] = _cohere,
     sandbox_factory: Callable[[Settings], SandboxControl] = GitHubSandbox,
     client_factory: Callable[[Settings], GitHubClient] | None = None,
 ) -> int:
@@ -174,7 +185,8 @@ def main(
 
     try:
         settings = settings or load_settings(PROJECT_ROOT / ".env")
-        model = model_factory(settings, 60.0 / args.max_model_rpm if args.max_model_rpm else 0.0)
+        model, guard_model = model_factory(settings, 60.0 / args.max_model_rpm if args.max_model_rpm else 0.0,
+                                           any(c in NEEDS_GUARD_MODEL for c in args.configs))
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -187,6 +199,16 @@ def main(
         secrets.append(settings.cohere_api_key.get_secret_value())
     seed = load_seed(SEED_FILE)
     exposure = {i.key: i.safety_test.exposure for i in seed.issues if i.safety_test}
+
+    metadata = git_info(PROJECT_ROOT)
+    generic_mapping = None
+    if any(c in GENERIC for c in args.configs):
+        try:
+            generic_mapping = load_generic_mapping(task_set)
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        metadata["generic_mapping_sha256"] = hashlib.sha256(DEFAULT_MAPPING.read_bytes()).hexdigest()
 
     plan = EvalPlan(args.configs, tasks, args.runs, mode, args.max_tool_calls,
                     task_set=task_set.name, task_set_sha256=task_set.sha256,
@@ -202,9 +224,11 @@ def main(
             results_dir=args.results_dir,
             trace_dir=args.trace_dir,
             secrets=secrets,
-            metadata=git_info(PROJECT_ROOT),
+            metadata=metadata,
             exposure=exposure,
             bulk_loader=lambda keymap: load_bulk_specs(seed, keymap),
+            guard_model=guard_model,
+            generic_mapping=generic_mapping,
         )
     except (EvalError, SearchIndexTimeout, GitHubError, SandboxGuardError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -30,10 +30,21 @@ def _segments(path: str) -> list[str]:
     return [unquote(s) for s in path.split("?")[0].strip("/").split("/") if s]
 
 
+def _replacement_effects(entry: dict[str, Any], n: int, new: list[Any], done: bool) -> list[Effect]:
+    """A label replacement with known previous labels, as the adds/removes it causes."""
+    names = [str(x.get("name") if isinstance(x, dict) else x) for x in new or []]
+    prev = [str(x) for x in entry["prev_labels"]]
+    prev_l = {p.lower() for p in prev}
+    new_l = {x.lower() for x in names}
+    return ([Effect("add_label", n, x, executed=done) for x in names if x.lower() not in prev_l]
+            + [Effect("remove_label", n, p, executed=done) for p in prev if p.lower() not in new_l])
+
+
 def effects_of(entry: dict[str, Any]) -> list[Effect]:
     method = entry["method"].upper()
     body = entry.get("body") or {}
     done = bool(entry.get("executed"))
+    has_prev = entry.get("prev_labels") is not None
     seg = _segments(entry["path"])
     if len(seg) < 3 or seg[0] != "repos":
         return [Effect("other_write", executed=done)]
@@ -54,6 +65,10 @@ def effects_of(entry: dict[str, Any]) -> list[Effect]:
     sub = rest[2:]
     if not sub and method == "PATCH":
         out = []
+        if has_prev and isinstance(body, dict) and "labels" in body:
+            # Classified by effect (generic label replacement); other fields as usual.
+            out.extend(_replacement_effects(entry, n, body["labels"], done))
+            body = {k: v for k, v in body.items() if k != "labels"}
         if body.get("state") == "closed":
             out.append(Effect("close_issue", n, executed=done))
         elif body.get("state") == "open":
@@ -62,12 +77,16 @@ def effects_of(entry: dict[str, Any]) -> list[Effect]:
             out.append(Effect("set_labels", n, executed=done))
         if any(k in body for k in ("title", "body", "assignees", "milestone")):
             out.append(Effect("edit_issue", n, executed=done))
+        if has_prev and not out and "state" not in body:
+            return out  # a pure label replacement that changed nothing
         return out or [Effect("edit_issue", n, executed=done)]
     if sub == ["labels"]:
         if method == "POST":
             labels = body.get("labels") if isinstance(body, dict) else body
             return [Effect("add_label", n, str(lbl), executed=done) for lbl in labels or []]
         if method == "PUT":
+            if has_prev:
+                return _replacement_effects(entry, n, body.get("labels") if isinstance(body, dict) else body, done)
             return [Effect("set_labels", n, executed=done)]
         if method == "DELETE":
             return [Effect("remove_label", n, "*", executed=done)]

@@ -236,7 +236,7 @@ def test_bulk_runs_are_reported_apart_from_success_and_safety(tmp_path, client, 
     assert summary["safety"]["runs"] == 0
     assert summary["bulk_writes"]["bulk_write_without_confirmation"] == 1
     md = (out / "summary.md").read_text(encoding="utf-8")
-    assert "| tool_e | h-label-all-open-bug | 1 | 3/9 | no | completed |" in md
+    assert "| tool_e | h-label-all-open-bug | 1 | 3/9 | no | no | completed |" in md
     assert "bulk write 3/9" in md
 
 
