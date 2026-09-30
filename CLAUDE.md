@@ -254,7 +254,7 @@ Agent model: Cohere Command (tool use). Tools exposed via MCP.
 ### Pending items
 1. Push the new commits (plain `git push`, by the user). Pushed up to debcad1. The
    segment-1 results pushed in 6f44274 contained owner-name misspellings; re-sanitised
-   in c9b699c, but still in pushed history (user decision whether to rewrite).
+   in c9b699c. They stay in pushed history (user decision: no history rewrite).
 2. For future tuning: a held-out task set that is not looked at while tuning.
 3. Next roadmap steps: README chart (step 11), scaffold docs (step 8, deferred).
 
