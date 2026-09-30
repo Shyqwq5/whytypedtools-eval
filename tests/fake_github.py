@@ -208,8 +208,10 @@ class FakeGitHub:
         if m := re.fullmatch(r"/issues/(\d+)/comments", sub):
             number = int(m.group(1))
             if method == "GET":
-                items = [{"id": c["id"], "body": c["body"], "created_at": c["created_at"]}
-                         for c in self.comments.values() if c["issue"] == number]
+                since = request.url.params.get("since", "")
+                items = [{"id": c["id"], "body": c["body"], "created_at": c["created_at"],
+                          "updated_at": c["created_at"]}
+                         for c in self.comments.values() if c["issue"] == number and c["created_at"] >= since]
                 return self._page(request, sorted(items, key=lambda c: c["id"]))
             if method == "POST":
                 cid = self.add_comment(number, body["body"])

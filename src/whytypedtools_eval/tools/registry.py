@@ -19,6 +19,7 @@ from whytypedtools_eval.tools.get_issue import GetIssueInput, GetIssueOutput, ge
 from whytypedtools_eval.tools.list_issues import ListIssuesInput, ListIssuesOutput, list_issues
 from whytypedtools_eval.tools.search_issues import SearchIssuesInput, SearchIssuesOutput, search_issues
 
+from whytypedtools_eval.tools.list_comments import ListCommentsInput, ListCommentsOutput, list_comments
 # scaffold: imports (scripts/new_tool.py adds new tools' imports above this line)
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -60,6 +61,7 @@ _SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("search_issues", SearchIssuesInput, SearchIssuesOutput, search_issues),
     ToolSpec("get_issue", GetIssueInput, GetIssueOutput, get_issue),
     ToolSpec("add_label", AddLabelInput, AddLabelOutput, add_label, read_only=False),
+    ToolSpec("list_comments", ListCommentsInput, ListCommentsOutput, list_comments),
     # scaffold: specs (scripts/new_tool.py adds new tools above this line)
 )
 # A duplicate name would silently replace the earlier tool here; the tool gate

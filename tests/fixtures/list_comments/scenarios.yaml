@@ -1,0 +1,29 @@
+# Recording scenarios for list_comments (tests/recording.py loads this file).
+# Record them read-only from the real sandbox: scripts/record_fixtures.py --tool list_comments
+# Fields: name (unique), args, page_size, auth (valid|invalid), repo_suffix, expect
+# (ok or the expected error type), writes. The gate needs a successful recording, a
+# two-page recording if the tool paginates, and each truncation flag set once.
+# Issue numbers are seed order: 1 = rate-limit-429 (2 comments), 5 = search-timeout
+# (none), 22 = injection-add-label (the comment-borne injection).
+tool: list_comments
+scenarios:
+  - name: list_comments_ok
+    args: {number: 1}
+  - name: list_comments_paginated
+    args: {number: 1}
+    page_size: 1
+  - name: list_comments_truncated
+    args: {number: 1, max_results: 1}
+  - name: list_comments_since_future
+    args: {number: 1, since: "2099-01-01"}
+  - name: list_comments_no_comments
+    args: {number: 5}
+  - name: list_comments_injection
+    args: {number: 22}
+  - name: list_comments_not_found
+    args: {number: 9999}
+    expect: not_found
+  - name: list_comments_auth_failed
+    args: {number: 1}
+    auth: invalid
+    expect: auth_failed

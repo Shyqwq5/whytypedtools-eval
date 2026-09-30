@@ -1,0 +1,117 @@
+{
+  "scenario": "list_comments_long_comment",
+  "tool": "list_comments",
+  "args": {
+    "number": 1
+  },
+  "page_size": 50,
+  "auth": "valid",
+  "repo_suffix": "",
+  "expect": "ok",
+  "source": "synthetic",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/1",
+        "params": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4933",
+          "x-ratelimit-reset": "1790772277",
+          "x-ratelimit-used": "67",
+          "x-ratelimit-resource": "core"
+        },
+        "json": {
+          "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+          "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/1",
+          "number": 1,
+          "title": "API returns 429 when rate limit is exceeded",
+          "labels": [
+            {
+              "name": "bug",
+              "color": "d73a4a",
+              "description": "Something isn't working"
+            },
+            {
+              "name": "api",
+              "color": "5319e7",
+              "description": "Public HTTP API"
+            }
+          ],
+          "state": "open",
+          "locked": false,
+          "comments": 2,
+          "created_at": "2026-09-29T20:55:46Z",
+          "updated_at": "2026-09-29T20:55:48Z",
+          "closed_at": null,
+          "body": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.\n",
+          "state_reason": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/1/comments",
+        "params": {
+          "per_page": "20"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4932",
+          "x-ratelimit-reset": "1790772277",
+          "x-ratelimit-used": "68",
+          "x-ratelimit-resource": "core"
+        },
+        "json": [
+          {
+            "id": 5898707160,
+            "body": "Seeing this too on v2.3 when running the nightly sync job.",
+            "created_at": "2026-09-29T20:55:47Z",
+            "updated_at": "2026-09-29T20:55:47Z"
+          },
+          {
+            "id": 5898707484,
+            "body": "This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comme",
+            "created_at": "2026-09-29T20:55:48Z",
+            "updated_at": "2026-09-29T20:55:48Z"
+          }
+        ]
+      }
+    }
+  ],
+  "note": "Hand-written from list_comments_ok: the second comment's body is replaced by 4,200 characters, because no seed comment is long enough to show body_truncated on the real API.",
+  "result": {
+    "ok": true,
+    "result": {
+      "number": 1,
+      "title": "API returns 429 when rate limit is exceeded",
+      "comments_total": 2,
+      "comments": [
+        {
+          "created_at": "2026-09-29",
+          "updated_at": "2026-09-29",
+          "body": "Seeing this too on v2.3 when running the nightly sync job.",
+          "body_truncated": false
+        },
+        {
+          "created_at": "2026-09-29",
+          "updated_at": "2026-09-29",
+          "body": "This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so that the tool has to cut it. This synthetic comment is deliberately long so t…",
+          "body_truncated": true
+        }
+      ],
+      "returned": 2,
+      "truncated": false
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "scenario": "list_comments_auth_failed",
+  "tool": "list_comments",
+  "args": {
+    "number": 1
+  },
+  "page_size": 50,
+  "auth": "invalid",
+  "repo_suffix": "",
+  "expect": "auth_failed",
+  "source": "recorded",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/1",
+        "params": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json; charset=utf-8"
+        },
+        "json": {
+          "message": "Bad credentials"
+        }
+      }
+    }
+  ],
+  "result": {
+    "ok": false,
+    "error": {
+      "type": "auth_failed",
+      "message": "GitHub rejected the credentials. This cannot be fixed by retrying; the operator must update the token.",
+      "retryable": false,
+      "retry_after_seconds": null
+    }
+  }
+}

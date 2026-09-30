@@ -89,9 +89,11 @@ def test_unknown_tool(mock_api):
 
 
 def _error_fixtures():
-    return [(f["tool"] if f["source"] != "synthetic" else "synthetic", f["scenario"])
+    # Hand-written error fixtures (tests/fixtures/synthetic/) have no stored result;
+    # a synthetic success fixture in a tool's folder (e.g. a long comment) is no error.
+    return [("synthetic" if "result" not in f else f["tool"], f["scenario"])
             for f in all_fixtures()
-            if f["source"] == "synthetic" or not f.get("result", {}).get("ok", True)]
+            if "result" not in f or not f["result"].get("ok", True)]
 
 
 @pytest.mark.parametrize("folder, name", _error_fixtures())

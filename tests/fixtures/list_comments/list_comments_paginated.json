@@ -1,0 +1,141 @@
+{
+  "scenario": "list_comments_paginated",
+  "tool": "list_comments",
+  "args": {
+    "number": 1
+  },
+  "page_size": 1,
+  "auth": "valid",
+  "repo_suffix": "",
+  "expect": "ok",
+  "source": "recorded",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/1",
+        "params": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4931",
+          "x-ratelimit-reset": "1790772277",
+          "x-ratelimit-used": "69",
+          "x-ratelimit-resource": "core"
+        },
+        "json": {
+          "repository_url": "https://api.github.com/repos/sandbox-owner/whytypedtools-sandbox",
+          "html_url": "https://github.com/sandbox-owner/whytypedtools-sandbox/issues/1",
+          "number": 1,
+          "title": "API returns 429 when rate limit is exceeded",
+          "labels": [
+            {
+              "name": "bug",
+              "color": "d73a4a",
+              "description": "Something isn't working"
+            },
+            {
+              "name": "api",
+              "color": "5319e7",
+              "description": "Public HTTP API"
+            }
+          ],
+          "state": "open",
+          "locked": false,
+          "comments": 2,
+          "created_at": "2026-09-29T20:55:46Z",
+          "updated_at": "2026-09-29T20:55:48Z",
+          "closed_at": null,
+          "body": "Calling `/v1/items` more than ~60 times per minute returns HTTP 429 with no\n`Retry-After` header, so clients cannot back off correctly.\n\nExpected: a `Retry-After` header on every 429 response.\n",
+          "state_reason": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/sandbox-owner/whytypedtools-sandbox/issues/1/comments",
+        "params": {
+          "per_page": "1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "link": "<https://api.github.com/repositories/1396516251/issues/1/comments?per_page=1&page=2>; rel=\"next\", <https://api.github.com/repositories/1396516251/issues/1/comments?per_page=1&page=2>; rel=\"last\"",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4930",
+          "x-ratelimit-reset": "1790772277",
+          "x-ratelimit-used": "70",
+          "x-ratelimit-resource": "core"
+        },
+        "json": [
+          {
+            "id": 5898707160,
+            "body": "Seeing this too on v2.3 when running the nightly sync job.",
+            "created_at": "2026-09-29T20:55:47Z",
+            "updated_at": "2026-09-29T20:55:47Z"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repositories/1396516251/issues/1/comments",
+        "params": {
+          "per_page": "1",
+          "page": "2"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "link": "<https://api.github.com/repositories/1396516251/issues/1/comments?per_page=1&page=1>; rel=\"prev\", <https://api.github.com/repositories/1396516251/issues/1/comments?per_page=1&page=1>; rel=\"first\"",
+          "x-ratelimit-limit": "5000",
+          "x-ratelimit-remaining": "4929",
+          "x-ratelimit-reset": "1790772277",
+          "x-ratelimit-used": "71",
+          "x-ratelimit-resource": "core"
+        },
+        "json": [
+          {
+            "id": 5898707484,
+            "body": "The gateway strips the header. Fix needs to go into the proxy config.",
+            "created_at": "2026-09-29T20:55:48Z",
+            "updated_at": "2026-09-29T20:55:48Z"
+          }
+        ]
+      }
+    }
+  ],
+  "result": {
+    "ok": true,
+    "result": {
+      "number": 1,
+      "title": "API returns 429 when rate limit is exceeded",
+      "comments_total": 2,
+      "comments": [
+        {
+          "created_at": "2026-09-29",
+          "updated_at": "2026-09-29",
+          "body": "Seeing this too on v2.3 when running the nightly sync job.",
+          "body_truncated": false
+        },
+        {
+          "created_at": "2026-09-29",
+          "updated_at": "2026-09-29",
+          "body": "The gateway strips the header. Fix needs to go into the proxy config.",
+          "body_truncated": false
+        }
+      ],
+      "returned": 2,
+      "truncated": false
+    }
+  }
+}

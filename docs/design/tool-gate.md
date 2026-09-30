@@ -1,7 +1,8 @@
 # Design note: the tool gate, the tool-set check and the scaffold (steps 9 and 8)
 
-Status: in progress (2026-09-30). Order: inventory, offline gate, tool-set check,
-how-to and scaffold, then a 5th tool added through the scaffold.
+Status: built (2026-09-30): inventory, offline gate, tool-set check (script not run:
+it waits for the owner's quota and go-ahead), how-to and scaffold, and a fifth tool
+(`list_comments`) added through the scaffold.
 
 Every tool, new or existing, has to pass one gate before it can be used in an eval.
 The four current tools (`list_issues`, `search_issues`, `get_issue`, `add_label`) are
@@ -152,3 +153,47 @@ never meant for. The tool-set check measures that.
   tool between the scaffold markers in `tools/registry.py`. Every placeholder is
   marked `TODO`; the gate's `no_todo` check fails until none is left, so a freshly
   scaffolded tool is red in CI with a list of what is missing.
+
+## 5. Proof: a fifth tool through the scaffold (`list_comments`)
+
+**Why this tool.** The original plan's step 4 asked for 5 to 6 tools. `list_comments`
+is read-only and overlaps with `get_issue` on purpose: both return an issue's
+comments (get_issue together with the body; list_comments only the discussion, with
+a `since` date filter and a longer per-comment cap). Six v2 tasks
+have their answer in comments and expect `get_issue` (`f-issue-comments`,
+`f-oauth-answer`, `h-pagination-closure-reason`, `h-pdf-export-team`,
+`h-retry-after-fix-location`, `h-okta-discussion`), so the tool-set check has real
+places where the agent may now switch tools. It also hands the comment-borne
+injection (`injection-add-label`) straight to the agent, which is why its tasks
+include an injection task although the tool cannot write. Its description carries no
+extra safety wording, so the injection result stays comparable with get_issue's.
+
+**How it went.**
+
+1. `scripts/new_tool.py list_comments --overlaps get_issue`: 6 files plus the
+   registry entry. The gate failed at once, **13 of 20 checks**: `folder` (no
+   fixtures), `invalid_input` and the seven `replay_error` checks (no ok fixture to
+   take arguments from), `replay_success`, `requests_scoped`, `writes_sandboxed`, and
+   `no_todo`.
+2. Description first, then the implementation (GET the issue: 404 and pull requests
+   become `not_found`; then the comments, paginated, only if there are any).
+3. Scenarios in `tests/fixtures/list_comments/scenarios.yaml`; eight fixtures recorded
+   **read-only from the real sandbox** (`record_fixtures.py --tool list_comments`):
+   success, two pages, `truncated`, `since` in the future, no comments, the Okta
+   injection issue, not found, bad credentials. One synthetic fixture
+   (`list_comments_long_comment`, built from the recorded success with a 4,200-character
+   comment) shows `body_truncated`, which no seed comment can.
+4. Four tasks in `eval_cases.yaml`: functional (`c-comments-rate-limit`), the
+   confusable pair (`c-pick-list-comments` / `c-pick-get-issue`), and an injection task
+   (`c-summarize-okta-comments`).
+5. The in-memory fake learned the comments endpoint's `since` filter.
+
+**Result: the offline gate passes, 20 of 20 checks, with no exceptions**, and the whole
+suite passes unchanged (scoring baseline, frozen tools: `tool_e` still exposes only the
+four frozen tools; `tool_e+list_comments` exposes five). The MCP server lists five
+tools.
+
+**Not run: the tool-set check.** `scripts/toolset_check.py` (no `--run`) plans 44 tasks
+× 3 = 132 runs of `tool_e+list_comments`, estimated at 256–549 model calls (point 366)
+and 0.8–1.7M input tokens, from tool_e's measured costs. It waits for the owner's
+quota and go-ahead.
