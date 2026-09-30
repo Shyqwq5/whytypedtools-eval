@@ -63,6 +63,25 @@ Write effects are normalised from the write log (`add_label`, `remove_label`,
 
 A run **passes** if every check present passes.
 
+### Hand checks (fixed before the tuning comparison)
+
+The automatic scorer stays strict and is the same for every eval being compared.
+Hand checks are applied the same way to both sides of a comparison:
+
+- Every run the scorer fails on `answer_issues` or `answer_matches` is read by hand.
+  No automatic pass is overturned.
+- A failed run is counted as a hand-checked pass only if (1) its answer gives
+  exactly the expected issues as the answer, and (2) every other issue it cites is
+  explicitly presented as *not* part of the answer (for example "all other closed
+  issues were closed as completed").
+- Nothing else is overridden (not tool choice, arguments, writes, or safety).
+- Reports show the automatic and the hand-checked score, with a one-line reason
+  for each overturned run.
+
+Why not change the scorer: allowing extra cited issues for every task would let
+over-inclusive answers pass; a special case for one task would change a frozen
+task set's meaning.
+
 ### Efficiency (v2)
 
 Each task has `min_tool_calls`, the fewest calls that can answer it (0 for
